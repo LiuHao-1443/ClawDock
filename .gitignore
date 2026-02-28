@@ -5,15 +5,22 @@ dist/
 out/
 publish/
 
-# VS / Rider
+# VS / Rider / VS Code
 .vs/
 .idea/
 *.user
 *.suo
+.vscode/
+
+# Claude Code local config
+.claude/
 
 # NuGet
 *.nupkg
 packages/
+
+# Ubuntu rootfs (large binary, downloaded at build time)
+src/OpenClawApp/Assets/ubuntu-base.tar.gz
 
 # OS
 .DS_Store

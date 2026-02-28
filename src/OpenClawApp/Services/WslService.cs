@@ -52,15 +52,20 @@ public class WslService
 
     private static bool IsVirtualizationEnabled()
     {
+        // WSL2 能运行就证明虚拟化已开启，直接返回 true
+        if (IsWsl2Installed()) return true;
+
         try
         {
-            // 检查 Hyper-V / VT-x 是否在系统中启用
-            var result = RunCommand("powershell", "-NoProfile -Command \"(Get-WmiObject Win32_Processor).VirtualizationFirmwareEnabled\"");
-            return result.Output.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+            var result = RunCommand("powershell",
+                "-NoProfile -Command \"(Get-WmiObject Win32_Processor).VirtualizationFirmwareEnabled\"");
+            // 检测不确定时乐观估计（虚拟机环境下 WMI 可能返回 False 但实际可用）
+            var val = result.Output.Trim();
+            return !val.Equals("False", StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
-            return true; // 检测失败时乐观估计
+            return true;
         }
     }
 
