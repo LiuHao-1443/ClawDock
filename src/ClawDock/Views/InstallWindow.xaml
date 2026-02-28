@@ -233,8 +233,9 @@
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                         </StackPanel>
                         <TextBlock x:Name="CheckWinVersionStatus" Grid.Row="0" Grid.Column="1"
-                                   FontSize="18" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" Text="⏳"/>
+                                   FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Text="…"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
 
                         <!-- 虚拟化 -->
                         <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,16">
@@ -244,8 +245,9 @@
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                         </StackPanel>
                         <TextBlock x:Name="CheckVirtStatus" Grid.Row="1" Grid.Column="1"
-                                   FontSize="18" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" Text="⏳"/>
+                                   FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Text="…"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
 
                         <!-- WSL2 -->
                         <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,0,16">
@@ -255,19 +257,21 @@
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                         </StackPanel>
                         <TextBlock x:Name="CheckWslStatus" Grid.Row="2" Grid.Column="1"
-                                   FontSize="18" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" Text="⏳"/>
+                                   FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Text="…"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
 
                         <!-- Ubuntu -->
                         <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,0,16">
                             <TextBlock Text="Ubuntu (WSL2 发行版)" FontSize="14"
                                        Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text="OpenClaw 运行环境" FontSize="12"
+                            <TextBlock Text="ClawDock 运行环境" FontSize="12"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                         </StackPanel>
                         <TextBlock x:Name="CheckUbuntuStatus" Grid.Row="3" Grid.Column="1"
-                                   FontSize="18" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" Text="⏳"/>
+                                   FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Text="…"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
                     </Grid>
 
                     <Border x:Name="CheckErrorBanner" Visibility="Collapsed"
