@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
-namespace OpenClawApp.Services;
+namespace ClawDock.Services;
 
 public record WslCheckResult(
     bool WindowsVersionOk,
@@ -101,7 +101,7 @@ public class WslService
     // Ubuntu 安装目录
     private static readonly string UbuntuInstallDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "OpenClaw", "Ubuntu");
+        "ClawDock", "Ubuntu");
 
     /// <summary>
     /// 安装 WSL2 + Ubuntu（使用内嵌 rootfs，无需联网下载）
@@ -198,7 +198,7 @@ public class WslService
 
         var assembly = System.Reflection.Assembly.GetExecutingAssembly();
         // 资源名：命名空间.文件路径（点分隔）
-        var resourceName = "OpenClawApp.Assets.ubuntu-base.tar.gz";
+        var resourceName = "ClawDock.Assets.ubuntu-base.tar.gz";
 
         using var stream = assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException($"找不到内嵌资源: {resourceName}");

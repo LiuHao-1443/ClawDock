@@ -5,8 +5,8 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>OpenClaw</AssemblyName>
-    <RootNamespace>OpenClawApp</RootNamespace>
+    <AssemblyName>ClawDock</AssemblyName>
+    <RootNamespace>ClawDock</RootNamespace>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

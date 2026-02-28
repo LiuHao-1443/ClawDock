@@ -1,8 +1,8 @@
-<Window x:Class="OpenClawApp.Views.MainWindow"
+<Window x:Class="ClawDock.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-        Title="OpenClaw"
+        Title="ClawDock"
         Width="1200" Height="780"
         MinWidth="800" MinHeight="600"
         WindowStartupLocation="CenterScreen"
@@ -33,7 +33,7 @@
                     <Image Source="/Assets/logo.png" Width="28" Height="28"
                            VerticalAlignment="Center" Margin="0,0,8,0"
                            RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text="OpenClaw" FontSize="15" FontWeight="SemiBold"
+                    <TextBlock Text="ClawDock" FontSize="15" FontWeight="SemiBold"
                                Foreground="{StaticResource TextPrimaryBrush}"
                                VerticalAlignment="Center" Margin="0,0,20,0"/>
                 </StackPanel>
@@ -94,7 +94,7 @@
                     <TextBlock Text="Gateway 未运行" FontSize="20" FontWeight="SemiBold"
                                Foreground="{StaticResource TextPrimaryBrush}"
                                HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                    <TextBlock Text="点击「启动」按钮启动 OpenClaw Gateway" FontSize="14"
+                    <TextBlock Text="点击「启动」按钮启动 ClawDock Gateway" FontSize="14"
                                Foreground="{StaticResource TextSecondaryBrush}"
                                HorizontalAlignment="Center" Margin="0,0,0,28"/>
                     <Button Content="▶  启动 Gateway"
@@ -107,7 +107,7 @@
             <!-- 正在启动提示 -->
             <Grid x:Name="PageStarting" Visibility="Collapsed" Background="{StaticResource BgBrush}">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="正在启动 OpenClaw Gateway..." FontSize="16"
+                    <TextBlock Text="正在启动 ClawDock Gateway..." FontSize="16"
                                Foreground="{StaticResource TextSecondaryBrush}"
                                HorizontalAlignment="Center" Margin="0,0,0,16"/>
                     <ProgressBar IsIndeterminate="True" Width="200" Height="4"

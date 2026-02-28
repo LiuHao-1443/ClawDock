@@ -1,4 +1,4 @@
-namespace OpenClawApp.Services;
+namespace ClawDock.Services;
 
 public class OpenClawService
 {
@@ -31,7 +31,7 @@ public class OpenClawService
             ("配置 npm 镜像",
              "npm config set registry https://registry.npmmirror.com"),
 
-            ("全局安装 OpenClaw",
+            ("全局安装 ClawDock",
              "npm install -g openclaw@latest"),
         };
 

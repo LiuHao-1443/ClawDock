@@ -2,10 +2,10 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
-using OpenClawApp.Services;
+using ClawDock.Services;
 using WpfApplication = System.Windows.Application;
 
-namespace OpenClawApp.Views;
+namespace ClawDock.Views;
 
 public partial class MainWindow : Window
 {
@@ -175,18 +175,18 @@ public partial class MainWindow : Window
     {
         _trayIcon = new System.Windows.Forms.NotifyIcon
         {
-            Text = "OpenClaw",
+            Text = "ClawDock",
             Visible = true
         };
 
-        // 从资源加载图标（如果有）
+        // 从内嵌资源加载图标（单文件 exe，磁盘上没有 Assets 目录）
         try
         {
-            var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico");
-            if (System.IO.File.Exists(iconPath))
-                _trayIcon.Icon = new System.Drawing.Icon(iconPath);
-            else
-                _trayIcon.Icon = System.Drawing.SystemIcons.Application;
+            var uri = new Uri("pack://application:,,,/Assets/icon.ico");
+            var info = System.Windows.Application.GetResourceStream(uri);
+            _trayIcon.Icon = info != null
+                ? new System.Drawing.Icon(info.Stream)
+                : System.Drawing.SystemIcons.Application;
         }
         catch
         {
@@ -199,7 +199,7 @@ public partial class MainWindow : Window
         menu.Items.Add("启动 Gateway", null, async (_, _) => await _gateway.StartAsync());
         menu.Items.Add("停止 Gateway", null, async (_, _) => await _gateway.StopAsync());
         menu.Items.Add("-");
-        menu.Items.Add("卸载 OpenClaw", null, (_, _) => OpenUninstallWindow());
+        menu.Items.Add("卸载 ClawDock", null, (_, _) => OpenUninstallWindow());
         menu.Items.Add("-");
         menu.Items.Add("退出", null, (_, _) => ExitApp());
 
@@ -227,7 +227,7 @@ public partial class MainWindow : Window
     {
         e.Cancel = true;
         Hide();
-        _trayIcon?.ShowBalloonTip(2000, "OpenClaw",
+        _trayIcon?.ShowBalloonTip(2000, "ClawDock",
             "已最小化到系统托盘，双击图标可重新打开", System.Windows.Forms.ToolTipIcon.Info);
     }
 

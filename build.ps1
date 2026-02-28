@@ -1,4 +1,4 @@
-# build.ps1 — OpenClaw Windows 一键构建脚本
+# build.ps1 — ClawDock 构建脚本
 # 依赖：.NET 8 SDK、Inno Setup 6（iscc.exe 在 PATH 中）
 
 param(
@@ -9,13 +9,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ProjectDir = "$PSScriptRoot\src\OpenClawApp"
+$ProjectDir = "$PSScriptRoot\src\ClawDock"
 $PublishDir = "$ProjectDir\bin\publish"
 $DistDir    = "$PSScriptRoot\dist"
 
 Write-Host ""
 Write-Host "=====================================" -ForegroundColor Cyan
-Write-Host "  OpenClaw Build Script" -ForegroundColor Cyan
+Write-Host "  ClawDock Build Script" -ForegroundColor Cyan
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -30,7 +30,6 @@ Write-Host "  ✓ .NET SDK: $(dotnet --version)"
 if (-not $SkipInno) {
     $iscc = Get-Command iscc -ErrorAction SilentlyContinue
     if (-not $iscc) {
-        # 尝试默认安装路径
         $defaultPath = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
         if (Test-Path $defaultPath) {
             $iscc = $defaultPath
@@ -45,7 +44,7 @@ if (-not $SkipInno) {
 Write-Host ""
 Write-Host "[2/4] 检查 Ubuntu rootfs..." -ForegroundColor Yellow
 
-$RootfsPath = "$PSScriptRoot\src\OpenClawApp\Assets\ubuntu-base.tar.gz"
+$RootfsPath = "$PSScriptRoot\src\ClawDock\Assets\ubuntu-base.tar.gz"
 if (-not (Test-Path $RootfsPath)) {
     Write-Host "  未找到 ubuntu-base.tar.gz，正在从 USTC 镜像下载..." -ForegroundColor Yellow
     $RootfsUrl = "https://mirrors.ustc.edu.cn/ubuntu-cdimage/ubuntu-base/releases/22.04/release/ubuntu-base-22.04.3-base-amd64.tar.gz"
@@ -89,7 +88,7 @@ if (-not $SkipPublish) {
     Write-Host "[3/4] 跳过 dotnet publish" -ForegroundColor Gray
 }
 
-# 3. Inno Setup 打包
+# 4. Inno Setup 打包
 if (-not $SkipInno) {
     Write-Host ""
     Write-Host "[4/4] 打包安装程序..." -ForegroundColor Yellow
@@ -110,7 +109,7 @@ if (-not $SkipInno) {
         Write-Error "Inno Setup 编译失败"
     }
 
-    $output = "$DistDir\OpenClawSetup.exe"
+    $output = "$DistDir\ClawDockSetup.exe"
     $size   = [math]::Round((Get-Item $output).Length / 1MB, 1)
     Write-Host "  ✓ 安装包: $output ($size MB)" -ForegroundColor Green
 } else {

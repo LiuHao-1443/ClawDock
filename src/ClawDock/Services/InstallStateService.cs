@@ -2,13 +2,13 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace OpenClawApp.Services;
+namespace ClawDock.Services;
 
 public enum InstallPhase
 {
     NotStarted,
     Wsl2,       // WSL2 已安装，等待重启后继续
-    OpenClaw,   // 正在安装 OpenClaw
+    OpenClaw,   // 正在安装 ClawDock
     Complete
 }
 
@@ -41,7 +41,7 @@ public class InstallStateService
 {
     private static readonly string StatePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "OpenClaw", "state.json");
+        "ClawDock", "state.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

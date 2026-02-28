@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
 
-namespace OpenClawApp.Services;
+namespace ClawDock.Services;
 
 public enum GatewayStatus { Stopped, Starting, Running, Error }
 

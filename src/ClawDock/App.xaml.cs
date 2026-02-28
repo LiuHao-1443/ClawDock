@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Security.Principal;
 using System.Windows;
-using OpenClawApp.Services;
-using OpenClawApp.Views;
+using ClawDock.Services;
+using ClawDock.Views;
 
-namespace OpenClawApp;
+namespace ClawDock;
 
 public partial class App : Application
 {
@@ -56,7 +56,7 @@ public partial class App : Application
         catch (Exception)
         {
             MessageBox.Show(
-                "OpenClaw 安装需要管理员权限，请右键点击程序并选择「以管理员身份运行」。",
+                "ClawDock 安装需要管理员权限，请右键点击程序并选择「以管理员身份运行」。",
                 "需要管理员权限",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);

@@ -1,8 +1,8 @@
 using System.Windows;
 using System.Windows.Media;
-using OpenClawApp.Services;
+using ClawDock.Services;
 
-namespace OpenClawApp.Views;
+namespace ClawDock.Views;
 
 public partial class InstallWindow : Window
 {

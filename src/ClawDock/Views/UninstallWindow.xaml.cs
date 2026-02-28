@@ -1,7 +1,7 @@
 using System.Windows;
-using OpenClawApp.Services;
+using ClawDock.Services;
 
-namespace OpenClawApp.Views;
+namespace ClawDock.Views;
 
 public partial class UninstallWindow : Window
 {

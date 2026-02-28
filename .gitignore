@@ -20,7 +20,7 @@ publish/
 packages/
 
 # Ubuntu rootfs (large binary, downloaded at build time)
-src/OpenClawApp/Assets/ubuntu-base.tar.gz
+src/ClawDock/Assets/ubuntu-base.tar.gz
 
 # OS
 .DS_Store

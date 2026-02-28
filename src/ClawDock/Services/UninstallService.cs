@@ -1,4 +1,4 @@
-namespace OpenClawApp.Services;
+namespace ClawDock.Services;
 
 public class UninstallService
 {
@@ -12,7 +12,7 @@ public class UninstallService
     }
 
     /// <summary>
-    /// 完整卸载：停止 Gateway → 卸载 OpenClaw → 可选移除 Ubuntu → 清理本地状态
+    /// 完整卸载：停止 Gateway → 卸载 ClawDock → 可选移除 Ubuntu → 清理本地状态
     /// </summary>
     public async Task UninstallAsync(
         bool removeUbuntu,
@@ -20,13 +20,13 @@ public class UninstallService
         CancellationToken ct = default)
     {
         // 1. 停止 Gateway
-        onLog("▶ 停止 OpenClaw Gateway...");
+        onLog("▶ 停止 ClawDock Gateway...");
         await _gateway.StopAsync();
         onLog("  ✓ Gateway 已停止");
         onLog("");
 
         // 2. 卸载 WSL2 内的 OpenClaw
-        onLog("▶ 卸载 OpenClaw (npm uninstall -g)...");
+        onLog("▶ 卸载 ClawDock (npm uninstall -g)...");
         await WslService.RunCommandStreamAsync(
             "wsl", "-d Ubuntu --user root -- bash -c \"npm uninstall -g openclaw 2>&1 || true\"",
             line => onLog("  " + line), ct);
@@ -63,7 +63,7 @@ public class UninstallService
     {
         using var runKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
             @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
-        runKey?.DeleteValue("OpenClaw",        throwOnMissingValue: false);
+        runKey?.DeleteValue("ClawDock",        throwOnMissingValue: false);
         runKey?.DeleteValue("OpenClawResume",  throwOnMissingValue: false);
     }
 
@@ -71,7 +71,7 @@ public class UninstallService
     {
         var path = System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "OpenClaw", "state.json");
+            "ClawDock", "state.json");
 
         if (System.IO.File.Exists(path))
             System.IO.File.Delete(path);
