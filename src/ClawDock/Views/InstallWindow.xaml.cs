@@ -125,6 +125,21 @@ public partial class InstallWindow : Window
                     _ = RunOpenClawInstallAsync();
                 break;
 
+            case 3:
+                // WSL2 安装后需要重启
+                if (_needsReboot)
+                {
+                    var result = MessageBox.Show(
+                        "WSL2 安装完成，需要重启计算机才能继续。\n\n重启后请重新打开 ClawDock，安装将自动继续。\n\n是否立即重启？",
+                        "重启计算机", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        System.Diagnostics.Process.Start("shutdown", "/r /t 5 /c \"ClawDock: WSL2 安装完成，正在重启...\"");
+                        Application.Current.Shutdown();
+                    }
+                }
+                break;
+
             case 5:
                 OpenMainWindow();
                 break;
@@ -192,8 +207,8 @@ public partial class InstallWindow : Window
                 WslRebootBanner.Visibility = Visibility.Visible;
                 _stateService.MarkWsl2Done();
                 SetResumeOnReboot();
-                BtnNext.IsEnabled = false;
-                BtnNext.Content = "请重启计算机";
+                BtnNext.IsEnabled = true;
+                BtnNext.Content = "立即重启";
             }
             else
             {
@@ -250,14 +265,14 @@ public partial class InstallWindow : Window
 
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
             @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
-        key?.SetValue("OpenClawResume", $"\"{exe}\"");
+        key?.SetValue("ClawDockResume", $"\"{exe}\"");
     }
 
     private static void ClearResumeOnReboot()
     {
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
             @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
-        key?.DeleteValue("OpenClawResume", throwOnMissingValue: false);
+        key?.DeleteValue("ClawDockResume", throwOnMissingValue: false);
     }
 
     // ── 状态图标辅助 ──────────────────────────────────────────────────────

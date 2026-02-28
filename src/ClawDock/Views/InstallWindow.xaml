@@ -306,7 +306,7 @@
                             BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,12,0,0">
                         <TextBlock TextWrapping="Wrap" FontSize="13"
                                    Foreground="{StaticResource WarningBrush}">
-                            ⚠ WSL2 安装完成，需要重启计算机。重启后请重新打开 OpenClaw，安装将自动继续。
+                            ⚠ WSL2 安装完成，需要重启计算机。重启后请重新打开 ClawDock，安装将自动继续。
                         </TextBlock>
                     </Border>
                 </Grid>
