@@ -21,6 +21,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         _gateway.StatusChanged += OnGatewayStatusChanged;
+        _gateway.LogReceived   += line => System.Diagnostics.Debug.WriteLine("[Gateway] " + line);
 
         // 定时轮询状态（每 5 秒）
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -106,6 +107,12 @@ public partial class MainWindow : Window
                 BtnStop.IsEnabled    = false;
                 BtnRestart.IsEnabled = false;
                 ShowNotRunning();
+                if (!string.IsNullOrEmpty(_gateway.LastError))
+                {
+                    MessageBox.Show(
+                        $"Gateway 启动失败：\n\n{_gateway.LastError}\n\n请检查 OpenClaw 是否已正确安装，或尝试重新安装。",
+                        "启动失败", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
                 break;
         }
     }

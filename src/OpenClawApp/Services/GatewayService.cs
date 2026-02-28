@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.Http;
+using System.Text;
 
 namespace OpenClawApp.Services;
 
@@ -14,6 +15,10 @@ public class GatewayService
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(2) };
 
     public event Action<GatewayStatus>? StatusChanged;
+    /// <summary>Gateway 进程的 stdout/stderr 输出</summary>
+    public event Action<string>? LogReceived;
+
+    public string LastError { get; private set; } = string.Empty;
 
     // ── 启动 ─────────────────────────────────────────────────────────────
 
@@ -21,6 +26,7 @@ public class GatewayService
     {
         if (await IsRunningAsync()) return;
 
+        LastError = string.Empty;
         StatusChanged?.Invoke(GatewayStatus.Starting);
 
         _gatewayProcess = new Process
@@ -28,15 +34,24 @@ public class GatewayService
             StartInfo = new ProcessStartInfo
             {
                 FileName = "wsl",
-                Arguments = $"-d Ubuntu -- bash -c \"openclaw gateway --port {Port}\"",
+                // 用 bash -l 登录 shell，确保 /usr/local/bin 在 PATH 中
+                Arguments = $"-d Ubuntu -- bash -l -c \"openclaw gateway --port {Port}\"",
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError  = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding  = Encoding.UTF8,
             },
             EnableRaisingEvents = true
         };
 
         _gatewayProcess.Exited += (_, _) => StatusChanged?.Invoke(GatewayStatus.Stopped);
         _gatewayProcess.Start();
+
+        // 异步读取 stdout/stderr，输出到 LogReceived 事件
+        _ = ReadStreamAsync(_gatewayProcess.StandardOutput);
+        _ = ReadStreamAsync(_gatewayProcess.StandardError);
 
         // 等待 Gateway 响应（最多 30 秒）
         for (int i = 0; i < 30; i++)
@@ -47,16 +62,37 @@ public class GatewayService
                 StatusChanged?.Invoke(GatewayStatus.Running);
                 return;
             }
+
+            // 如果进程已提前退出，立刻报错
+            if (_gatewayProcess.HasExited)
+            {
+                LastError = $"Gateway 进程意外退出（退出码 {_gatewayProcess.ExitCode}）";
+                StatusChanged?.Invoke(GatewayStatus.Error);
+                return;
+            }
         }
 
+        LastError = $"等待 Gateway 响应超时（30 秒），请检查 openclaw 是否正确安装。";
         StatusChanged?.Invoke(GatewayStatus.Error);
+    }
+
+    private async Task ReadStreamAsync(System.IO.StreamReader reader)
+    {
+        while (!reader.EndOfStream)
+        {
+            var line = await reader.ReadLineAsync();
+            if (line is { Length: > 0 })
+            {
+                LastError = line;          // 保留最后一行用于错误提示
+                LogReceived?.Invoke(line);
+            }
+        }
     }
 
     // ── 停止 ─────────────────────────────────────────────────────────────
 
     public async Task StopAsync()
     {
-        // 停止通过 WSL 启动的 openclaw 进程
         await WslService.RunCommandStreamAsync(
             "wsl",
             "-d Ubuntu -- bash -c \"pkill -f 'openclaw gateway' || true\"",
