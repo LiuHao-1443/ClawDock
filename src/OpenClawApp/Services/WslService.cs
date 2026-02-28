@@ -176,8 +176,8 @@ public class WslService
         onLog("▶ 配置 apt 国内镜像（USTC）...");
         await RunCommandStreamAsync("wsl",
             "-d Ubuntu --user root -- bash -c \"" +
-            "sed -i 's|http://archive.ubuntu.com|https://mirrors.ustc.edu.cn|g' /etc/apt/sources.list && " +
-            "sed -i 's|http://security.ubuntu.com|https://mirrors.ustc.edu.cn|g' /etc/apt/sources.list" +
+            "LANG=C sed -i 's|http://archive.ubuntu.com|https://mirrors.ustc.edu.cn|g' /etc/apt/sources.list && " +
+            "LANG=C sed -i 's|http://security.ubuntu.com|https://mirrors.ustc.edu.cn|g' /etc/apt/sources.list" +
             "\"",
             line => onLog("  " + line), ct);
         onLog("  ✓ 镜像配置完成");
@@ -234,8 +234,8 @@ public class WslService
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.Unicode,
-            StandardErrorEncoding  = Encoding.Unicode,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding  = Encoding.UTF8,
         };
         p.Start();
         var raw = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
@@ -257,9 +257,8 @@ public class WslService
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            // 不强制 UTF-8，由 CleanLine 处理编码问题
-            StandardOutputEncoding = Encoding.Unicode,
-            StandardErrorEncoding  = Encoding.Unicode,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding  = Encoding.UTF8,
         };
         p.Start();
 
@@ -294,18 +293,20 @@ public class WslService
     }
 
     /// <summary>
-    /// 清理 WSL 输出中的乱码：
+    /// 清理 WSL 输出中的乱码/噪音：
     ///   1. 去除 ANSI 转义序列（颜色/光标控制码）
-    ///   2. 去除空字节（UTF-16 读取残留）
-    ///   3. 折叠多余空格
+    ///   2. 取最后一段（\r 分隔的进度行只保留末尾完整行）
+    ///   3. 去除空字节及不可打印控制字符
+    ///   4. 折叠多余空格
     /// </summary>
     private static string CleanLine(string line)
     {
         // 去除 ANSI 转义序列，如 \x1B[32m \x1B[0K 等
         line = Regex.Replace(line, @"\x1B\[[0-9;]*[A-Za-z]", "");
-        // 去除空字节
-        line = line.Replace("\0", "");
-        // 去除其他不可打印控制字符（保留 Tab）
+        // apt 用 \r 覆写进度行，只保留最后一段
+        var crIdx = line.LastIndexOf('\r');
+        if (crIdx >= 0) line = line[(crIdx + 1)..];
+        // 去除空字节及其他不可打印控制字符（保留 Tab）
         line = Regex.Replace(line, @"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "");
         // 折叠多余空格
         line = Regex.Replace(line, @" {2,}", " ");

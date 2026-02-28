@@ -9,20 +9,23 @@ public class OpenClawService
     /// </summary>
     public async Task InstallAsync(Action<string> onLog, CancellationToken ct = default)
     {
+        // LANG=C 强制 apt 输出英文，避免中文编码问题；DEBIAN_FRONTEND 禁止交互提示
+        const string Env = "LANG=C DEBIAN_FRONTEND=noninteractive";
+
         var steps = new (string Label, string Command)[]
         {
             ("更新软件包列表",
-             "apt-get update -y"),
+             $"{Env} apt-get update -q"),
 
             ("安装 curl 和基础工具",
-             "apt-get install -y curl ca-certificates"),
+             $"{Env} apt-get install -y -q curl ca-certificates"),
 
             // 使用阿里云镜像加速 Node.js 安装脚本
             ("添加 Node.js 22 源",
-             "curl -fsSL https://mirrors.aliyun.com/nodesource/deb/setup_22.x | bash -"),
+             $"LANG=C curl -fsSL https://mirrors.aliyun.com/nodesource/deb/setup_22.x | LANG=C bash -"),
 
             ("安装 Node.js 22",
-             "apt-get install -y nodejs"),
+             $"{Env} apt-get install -y -q nodejs"),
 
             // 配置 npm 使用淘宝镜像加速 openclaw 下载
             ("配置 npm 镜像",
