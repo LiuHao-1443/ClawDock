@@ -30,7 +30,9 @@
 
                 <!-- Logo -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="🦞" FontSize="20" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <Image Source="/Assets/logo.png" Width="28" Height="28"
+                           VerticalAlignment="Center" Margin="0,0,8,0"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="OpenClaw" FontSize="15" FontWeight="SemiBold"
                                Foreground="{StaticResource TextPrimaryBrush}"
                                VerticalAlignment="Center" Margin="0,0,20,0"/>
@@ -86,8 +88,9 @@
             <!-- 未运行提示页 -->
             <Grid x:Name="PageNotRunning" Background="{StaticResource BgBrush}">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="🦞" FontSize="64"
-                               HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                    <Image Source="/Assets/logo.png" Width="80" Height="80"
+                           HorizontalAlignment="Center" Margin="0,0,0,16"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="Gateway 未运行" FontSize="20" FontWeight="SemiBold"
                                Foreground="{StaticResource TextPrimaryBrush}"
                                HorizontalAlignment="Center" Margin="0,0,0,8"/>

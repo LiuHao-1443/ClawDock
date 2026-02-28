@@ -29,7 +29,8 @@
                 <!-- Logo 区域 -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal"
                             VerticalAlignment="Center" Margin="20,0">
-                    <TextBlock Text="🦞" FontSize="28" VerticalAlignment="Center"/>
+                    <Image Source="/Assets/logo.png" Width="36" Height="36"
+                           VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <StackPanel Margin="10,0,0,0">
                         <TextBlock Text="OpenClaw" FontSize="15" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextPrimaryBrush}"/>
@@ -328,7 +329,9 @@
                 <!-- ===== Step 5: 完成 ===== -->
                 <StackPanel x:Name="PageDone" Visibility="Collapsed"
                             VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="🎉" FontSize="56" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                    <Image Source="/Assets/logo.png" Width="72" Height="72"
+                           HorizontalAlignment="Center" Margin="0,0,0,16"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="安装完成！" FontSize="24" FontWeight="SemiBold"
                                Foreground="{StaticResource TextPrimaryBrush}"
                                HorizontalAlignment="Center" Margin="0,0,0,12"/>
