@@ -140,11 +140,11 @@ public partial class InstallWindow : Window
         var result = await Task.Run(() => _wslService.Check());
 
         CheckWinVersionText.Text = $"当前版本: Build {result.WindowsBuild} (需要 Build 19041+)";
-        CheckWinVersionStatus.Text = result.WindowsVersionOk ? "✅" : "❌";
+        SetStatus(CheckWinVersionStatus, result.WindowsVersionOk ? StatusKind.Ok : StatusKind.Error);
 
-        CheckVirtStatus.Text = result.VirtualizationEnabled ? "✅" : "⚠️";
-        CheckWslStatus.Text  = result.Wsl2Installed    ? "✅" : "➖";
-        CheckUbuntuStatus.Text = result.UbuntuInstalled ? "✅" : "➖";
+        SetStatus(CheckVirtStatus,   result.VirtualizationEnabled ? StatusKind.Ok : StatusKind.Warn);
+        SetStatus(CheckWslStatus,    result.Wsl2Installed    ? StatusKind.Ok : StatusKind.None);
+        SetStatus(CheckUbuntuStatus, result.UbuntuInstalled  ? StatusKind.Ok : StatusKind.None);
 
         _wslAlreadyInstalled = result.Wsl2Installed && result.UbuntuInstalled;
 
@@ -258,6 +258,33 @@ public partial class InstallWindow : Window
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
             @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
         key?.DeleteValue("OpenClawResume", throwOnMissingValue: false);
+    }
+
+    // ── 状态图标辅助 ──────────────────────────────────────────────────────
+
+    private enum StatusKind { Ok, Error, Warn, None }
+
+    private void SetStatus(System.Windows.Controls.TextBlock tb, StatusKind kind)
+    {
+        switch (kind)
+        {
+            case StatusKind.Ok:
+                tb.Text = "✓";
+                tb.Foreground = (System.Windows.Media.Brush)FindResource("SuccessBrush");
+                break;
+            case StatusKind.Error:
+                tb.Text = "✗";
+                tb.Foreground = (System.Windows.Media.Brush)FindResource("ErrorBrush");
+                break;
+            case StatusKind.Warn:
+                tb.Text = "!";
+                tb.Foreground = (System.Windows.Media.Brush)FindResource("WarningBrush");
+                break;
+            case StatusKind.None:
+                tb.Text = "—";
+                tb.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush");
+                break;
+        }
     }
 
     // ── 打开主窗口 ────────────────────────────────────────────────────────
