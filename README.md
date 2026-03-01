@@ -34,7 +34,6 @@
 ### 依赖
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [Inno Setup 6](https://jrsoftware.org/isinfo.php)（可选，用于打包 Setup.exe）
 
 ### 构建步骤
 
@@ -43,10 +42,7 @@
 git clone https://github.com/LiuHao-1443/ClawDock.git
 cd ClawDock
 
-# 一键构建（自动下载 Ubuntu rootfs + 编译 + 打包）
-.\build.ps1
-
-# 仅编译，不打包 Inno Setup
+# 一键构建（自动下载 Ubuntu rootfs + 编译）
 .\build.ps1 -SkipInno
 ```
 
@@ -54,7 +50,6 @@ cd ClawDock
 
 构建产物：
 - `src/ClawDock/bin/publish/ClawDock.exe` — 独立可执行文件（约 184MB，无需安装 .NET）
-- `dist/ClawDockSetup.exe` — Inno Setup 打包的安装程序
 
 ## 项目结构
 
@@ -64,7 +59,6 @@ ClawDock/
 │   ├── Views/                # 安装向导 + 主窗口
 │   ├── Services/             # WSL2、Gateway、安装、卸载服务
 │   └── Assets/               # 图标等资源
-├── installer/setup.iss       # Inno Setup 打包脚本
 ├── assets/                   # README 资源（banner 等）
 └── build.ps1                 # 一键构建脚本
 ```
@@ -74,8 +68,6 @@ ClawDock/
 - **C# 12 + .NET 8 + WPF** — 原生 Windows UI
 - **Microsoft.Web.WebView2** — 内置浏览器（Edge 内核）
 - **WSL2 + Ubuntu 22.04** — OpenClaw 运行环境
-- **Inno Setup 6** — 安装包打包
-
 ## License
 
 [MIT](LICENSE)
