@@ -22,6 +22,9 @@ packages/
 # Ubuntu rootfs (large binary, downloaded at build time)
 src/ClawDock/Assets/ubuntu-base.tar.gz
 
+# Docs (local design notes)
+docs/
+
 # OS
 .DS_Store
 Thumbs.db
