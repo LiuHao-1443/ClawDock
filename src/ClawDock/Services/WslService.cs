@@ -117,35 +117,14 @@ public class WslService
             return true;
         }
 
-        // Step 1: 确保 WSL2 内核已启用（不下载发行版，仅启用功能）
-        if (!IsWsl2Installed())
-        {
-            onLog("▶ 启用 WSL2 功能...");
-            bool rebootRequired = false;
+        // Step 1: 确保 WSL2 内核 + Virtual Machine Platform 已启用
+        // 始终运行（幂等），因为 wsl --status 可能成功但 VM Platform 未启用
+        onLog("▶ 启用 WSL2 功能...");
 
-            await RunCommandStreamAsync("wsl", "--install --no-distribution",
-                line =>
-                {
-                    onLog(line);
-                    if (line.Contains("restart", StringComparison.OrdinalIgnoreCase) ||
-                        line.Contains("reboot",  StringComparison.OrdinalIgnoreCase) ||
-                        line.Contains("重启") || line.Contains("重新启动"))
-                    {
-                        rebootRequired = true;
-                    }
-                }, ct);
+        await RunCommandStreamAsync("wsl", "--install --no-distribution",
+            line => onLog("  " + line), ct);
 
-            if (rebootRequired)
-            {
-                onLog("");
-                onLog("⚠ WSL2 功能已启用，系统需要重启才能继续");
-                return false;
-            }
-
-            await Task.Delay(2000, ct);
-        }
-
-        // Step 2: 从内嵌资源导入 Ubuntu（本地操作，极快）
+        // Step 2: 从内嵌资源导入 Ubuntu
         if (!IsUbuntuInstalled())
         {
             onLog("");
@@ -166,17 +145,26 @@ public class WslService
             }
             finally
             {
-                // 清理临时文件
                 if (File.Exists(tarball))
                     File.Delete(tarball);
             }
 
-            // 验证 Ubuntu 是否真正导入成功
+            // import 失败 → 很可能是 VM Platform 刚启用需要重启
             if (!IsUbuntuInstalled())
-                throw new InvalidOperationException(
-                    "Ubuntu 导入失败。请检查 WSL2 是否正常运行，或尝试在命令行手动执行: wsl --install");
+            {
+                // 清理失败残留的空目录
+                try { Directory.Delete(UbuntuInstallDir, true); } catch { }
+
+                onLog("");
+                onLog("⚠ Ubuntu 导入失败，可能需要重启计算机以激活 WSL2 虚拟化组件");
+                return false;  // 触发重启流程
+            }
 
             onLog("  ✓ Ubuntu 导入完成");
+        }
+        else
+        {
+            onLog("  ✓ WSL2 功能已就绪");
         }
 
         // Step 3: 配置国内 apt 镜像（加速后续 apt install）
