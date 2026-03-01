@@ -46,8 +46,8 @@
 
 ```powershell
 # 克隆项目
-git clone https://github.com/your-username/openclaw-package.git
-cd openclaw-package
+git clone https://github.com/LiuHao-1443/ClawDock.git
+cd ClawDock
 
 # 一键构建（自动下载 Ubuntu rootfs + 编译 + 打包）
 .\build.ps1
@@ -59,19 +59,19 @@ cd openclaw-package
 > `ubuntu-base.tar.gz` 不在 git 仓库中，`build.ps1` 会自动从 USTC 镜像下载。
 
 构建产物：
-- `src/OpenClawApp/bin/publish/OpenClaw.exe` — 独立可执行文件（约 184MB，无需安装 .NET）
-- `dist/OpenClawSetup.exe` — Inno Setup 打包的安装程序
+- `src/ClawDock/bin/publish/ClawDock.exe` — 独立可执行文件（约 184MB，无需安装 .NET）
+- `dist/ClawDockSetup.exe` — Inno Setup 打包的安装程序
 
 ## 项目结构
 
 ```
-openclaw-package/
-├── src/OpenClawApp/          # C# WPF 主项目
+ClawDock/
+├── src/ClawDock/             # C# WPF 主项目
 │   ├── Views/                # 安装向导 + 主窗口
 │   ├── Services/             # WSL2、Gateway、安装、卸载服务
 │   └── Assets/               # 图标等资源
 ├── installer/setup.iss       # Inno Setup 打包脚本
-├── docs/design.md            # 设计文档
+├── assets/                   # README 资源（banner 等）
 └── build.ps1                 # 一键构建脚本
 ```
 
