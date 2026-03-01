@@ -20,12 +20,13 @@ public partial class InstallWindow : Window
         InitializeComponent();
         _stateService = stateService;
 
-        // 如果上次安装到一半（已过 WSL2 阶段），直接跳到 Step 4
+        // 如果上次安装到一半（WSL2 已启用但需要重启），重启后继续：
+        // 先回到 Step 3 完成 Ubuntu 导入，再自动进入 Step 4 安装 OpenClaw
         var state = stateService.Load();
         if (state.Phase == InstallPhase.Wsl2)
         {
-            NavigateTo(4);
-            _ = RunOpenClawInstallAsync();
+            NavigateTo(3);
+            _ = RunWsl2InstallAsync();
         }
     }
 
