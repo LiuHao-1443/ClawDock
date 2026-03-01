@@ -1,6 +1,10 @@
-# OpenClaw for Windows
+<p align="center">
+  <img src="assets/banner.jpg" width="200" alt="ClawDock" />
+</p>
 
-> OpenClaw 的 Windows 一键安装器 + 启动器
+<h1 align="center">ClawDock</h1>
+
+<p align="center">OpenClaw 的 Windows 一键安装器 + 启动器</p>
 
 [OpenClaw](https://github.com/openclaw/openclaw) 是一款运行在自己设备上的个人 AI 助手平台，支持接入 WhatsApp、Telegram、Slack、Discord 等主流消息平台。官方暂无 Windows 原生安装方案，本项目提供：
 

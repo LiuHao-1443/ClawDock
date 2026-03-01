@@ -14,8 +14,6 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _statusTimer;
     private System.Windows.Forms.NotifyIcon? _trayIcon;
 
-    private const string GatewayUrl = "http://localhost:18789";
-
     public MainWindow()
     {
         InitializeComponent();
@@ -23,16 +21,19 @@ public partial class MainWindow : Window
         _gateway.StatusChanged += OnGatewayStatusChanged;
         _gateway.LogReceived   += OnGatewayLogReceived;
 
-        // 定时轮询状态（每 5 秒）
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _statusTimer.Tick += async (_, _) => await PollStatusAsync();
-        _statusTimer.Start();
+
+        // 启动时禁用所有按钮，等 WSL 就绪后再启用
+        BtnStart.IsEnabled = false;
+        BtnStop.IsEnabled = false;
+        BtnRestart.IsEnabled = false;
 
         InitTrayIcon();
         InitWebView();
 
-        // 启动时自动检测并启动 Gateway
-        _ = AutoStartAsync();
+        // 先等 WSL 就绪，再检测 Gateway 状态
+        _ = InitializeAndAutoStartAsync();
     }
 
     // ── WebView2 初始化 ────────────────────────────────────────────────────
@@ -63,15 +64,24 @@ public partial class MainWindow : Window
 
     // ── Gateway 状态 ──────────────────────────────────────────────────────
 
+    private GatewayStatus _lastStatus = GatewayStatus.Stopped;
+
     private void OnGatewayStatusChanged(GatewayStatus status)
     {
         Dispatcher.Invoke(() => ApplyStatus(status));
     }
 
+    private bool _operationInProgress;
+
     private async Task PollStatusAsync()
     {
+        // 操作进行中不轮询，避免干扰启动/停止/重启的状态转换
+        if (_operationInProgress) return;
+
         var status = await _gateway.GetStatusAsync();
-        ApplyStatus(status);
+        // 轮询只在状态变化时更新 UI，避免重复刷新 WebView2
+        if (status != _lastStatus)
+            ApplyStatus(status);
     }
 
     private void ApplyStatus(GatewayStatus status)
@@ -120,56 +130,140 @@ public partial class MainWindow : Window
                 }
                 break;
         }
+
+        _lastStatus = status;
     }
+
+    private bool _browserNavigated;
 
     private void ShowBrowser()
     {
-        Browser.Visibility       = Visibility.Visible;
-        PageNotRunning.Visibility = Visibility.Collapsed;
-        PageStarting.Visibility  = Visibility.Collapsed;
+        Browser.Visibility         = Visibility.Visible;
+        PageNotRunning.Visibility  = Visibility.Collapsed;
+        PageStarting.Visibility    = Visibility.Collapsed;
+        PageInitializing.Visibility = Visibility.Collapsed;
 
-        if (Browser.Source?.ToString() != GatewayUrl)
-            Browser.Source = new Uri(GatewayUrl);
+        // 只在首次切到运行状态时导航，避免反复刷新页面
+        if (!_browserNavigated)
+        {
+            Browser.Source = new Uri(_gateway.DashboardUrl);
+            _browserNavigated = true;
+        }
     }
 
     private void ShowStarting()
     {
-        Browser.Visibility       = Visibility.Collapsed;
-        PageNotRunning.Visibility = Visibility.Collapsed;
-        PageStarting.Visibility  = Visibility.Visible;
+        Browser.Visibility         = Visibility.Collapsed;
+        PageNotRunning.Visibility  = Visibility.Collapsed;
+        PageStarting.Visibility    = Visibility.Visible;
+        PageInitializing.Visibility = Visibility.Collapsed;
     }
 
     private void ShowNotRunning()
     {
-        Browser.Visibility       = Visibility.Collapsed;
-        PageNotRunning.Visibility = Visibility.Visible;
-        PageStarting.Visibility  = Visibility.Collapsed;
+        Browser.Visibility         = Visibility.Collapsed;
+        PageNotRunning.Visibility  = Visibility.Visible;
+        PageStarting.Visibility    = Visibility.Collapsed;
+        PageInitializing.Visibility = Visibility.Collapsed;
+        _browserNavigated = false;
     }
 
-    // ── 自动启动 ──────────────────────────────────────────────────────────
+    // ── 初始化 + 自动启动 ──────────────────────────────────────────────────
 
-    private async Task AutoStartAsync()
+    private async Task InitializeAndAutoStartAsync()
     {
+        // 先检查 Gateway 是否已经在运行（WSL 可能已就绪）
         var isRunning = await _gateway.IsRunningAsync();
         if (isRunning)
+        {
+            _statusTimer.Start();
             ApplyStatus(GatewayStatus.Running);
-        else
-            ApplyStatus(GatewayStatus.Stopped);
+            return;
+        }
+
+        // Gateway 未运行，需要等 WSL 子系统就绪
+        ShowInitializing();
+
+        var ready = await Task.Run(async () =>
+        {
+            for (int i = 0; i < 60; i++) // 最多等 60 秒
+            {
+                try
+                {
+                    var output = "";
+                    var exitCode = await WslService.RunCommandStreamAsync("wsl",
+                        $"-d {WslService.DistroName} --user root -- echo ok",
+                        line => output += line);
+                    if (exitCode == 0 && output.Contains("ok"))
+                        return true;
+                }
+                catch { }
+
+                await Task.Delay(1000);
+            }
+            return false;
+        });
+
+        Dispatcher.Invoke(() =>
+        {
+            _statusTimer.Start();
+
+            if (ready)
+            {
+                ApplyStatus(GatewayStatus.Stopped);
+            }
+            else
+            {
+                StatusDot.Fill = (SolidColorBrush)FindResource("WarningBrush");
+                StatusText.Text = "WSL 未就绪";
+                BtnStart.IsEnabled = true; // 仍允许手动尝试
+                BtnStop.IsEnabled = false;
+                BtnRestart.IsEnabled = false;
+                ShowNotRunning();
+            }
+        });
+    }
+
+    private void ShowInitializing()
+    {
+        Browser.Visibility = Visibility.Collapsed;
+        PageNotRunning.Visibility = Visibility.Collapsed;
+        PageStarting.Visibility = Visibility.Collapsed;
+        PageInitializing.Visibility = Visibility.Visible;
+
+        StatusDot.Fill = (SolidColorBrush)FindResource("WarningBrush");
+        StatusText.Text = "初始化中...";
     }
 
     // ── 按钮事件 ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// 执行 Gateway 操作，操作期间暂停状态轮询，避免干扰状态转换
+    /// </summary>
+    private async Task RunGatewayOperationAsync(Func<Task> operation)
+    {
+        _operationInProgress = true;
+        try
+        {
+            await Task.Run(operation);
+        }
+        finally
+        {
+            _operationInProgress = false;
+        }
+    }
+
     private async void BtnStart_Click(object sender, RoutedEventArgs e)
-        => await _gateway.StartAsync();
+        => await RunGatewayOperationAsync(() => _gateway.StartAsync());
 
     private async void BtnStop_Click(object sender, RoutedEventArgs e)
-        => await _gateway.StopAsync();
+        => await RunGatewayOperationAsync(() => _gateway.StopAsync());
 
     private async void BtnRestart_Click(object sender, RoutedEventArgs e)
-        => await _gateway.RestartAsync();
+        => await RunGatewayOperationAsync(() => _gateway.RestartAsync());
 
     private void BtnOpenBrowser_Click(object sender, RoutedEventArgs e)
-        => Process.Start(new ProcessStartInfo(GatewayUrl) { UseShellExecute = true });
+        => Process.Start(new ProcessStartInfo(_gateway.DashboardUrl) { UseShellExecute = true });
 
     private void BtnUninstall_Click(object sender, RoutedEventArgs e)
         => OpenUninstallWindow();
@@ -201,8 +295,8 @@ public partial class MainWindow : Window
         var menu = new System.Windows.Forms.ContextMenuStrip();
         menu.Items.Add("打开", null, (_, _) => ShowWindow());
         menu.Items.Add("-");
-        menu.Items.Add("启动 Gateway", null, async (_, _) => await _gateway.StartAsync());
-        menu.Items.Add("停止 Gateway", null, async (_, _) => await _gateway.StopAsync());
+        menu.Items.Add("启动 Gateway", null, (_, _) => _ = RunGatewayOperationAsync(() => _gateway.StartAsync()));
+        menu.Items.Add("停止 Gateway", null, (_, _) => _ = RunGatewayOperationAsync(() => _gateway.StopAsync()));
         menu.Items.Add("-");
         menu.Items.Add("卸载 ClawDock", null, (_, _) => OpenUninstallWindow());
         menu.Items.Add("-");

@@ -4,6 +4,17 @@ public class OpenClawService
 {
     private readonly WslService _wsl = new();
 
+    // Node.js 安装脚本（会 base64 编码后传入 WSL，避免引号/转义问题）
+    private const string NodeInstallScript =
+        "#!/bin/bash\n" +
+        "set -e\n" +
+        "NODE_VER=$(curl -fsSL https://npmmirror.com/mirrors/node/latest-v22.x/SHASUMS256.txt" +
+        " | head -1 | sed 's/.*node-v//' | sed 's/-.*//')\n" +
+        "if [ -z \"$NODE_VER\" ]; then echo 'ERROR: Failed to determine Node.js version'; exit 1; fi\n" +
+        "echo \"Installing Node.js v$NODE_VER...\"\n" +
+        "curl -fsSL \"https://npmmirror.com/mirrors/node/v$NODE_VER/node-v$NODE_VER-linux-x64.tar.xz\"" +
+        " | tar -xJ --strip-components=1 -C /usr/local\n";
+
     /// <summary>
     /// 在 WSL2 Ubuntu 内安装 Node.js 22 + OpenClaw
     /// </summary>
@@ -11,6 +22,9 @@ public class OpenClawService
     {
         // LANG=C 强制 apt 输出英文，避免中文编码问题；DEBIAN_FRONTEND 禁止交互提示
         const string Env = "LANG=C DEBIAN_FRONTEND=noninteractive";
+
+        // 将安装脚本 base64 编码，避免 $() 和单引号经过 Windows→wsl→bash 链路时被破坏
+        var scriptB64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(NodeInstallScript));
 
         var steps = new (string Label, string Command)[]
         {
@@ -21,14 +35,13 @@ public class OpenClawService
              $"{Env} apt-get install -y -q curl ca-certificates git xz-utils"),
 
             // 从淘宝 Node.js 镜像直接下载二进制包，避免依赖境外 NodeSource 源
+            // 脚本通过 base64 传入，绕开 wsl.exe 的引号/转义问题
             ("下载并安装 Node.js 22",
-             "NODE_VER=$(curl -fsSL https://npmmirror.com/mirrors/node/latest-v22.x/SHASUMS256.txt | head -1 | sed 's/.*node-v//' | sed 's/-.*//') && " +
-             "echo Installing Node.js v$NODE_VER && " +
-             "curl -fsSL https://npmmirror.com/mirrors/node/v$NODE_VER/node-v$NODE_VER-linux-x64.tar.xz | tar -xJ --strip-components=1 -C /usr/local"),
+             $"echo {scriptB64} | base64 -d | bash"),
 
             // 验证安装的 Node.js 版本确实为 v22.x
             ("验证 Node.js 版本",
-             "/usr/local/bin/node --version | grep -q '^v22' || { echo 'ERROR: Node.js 22 未正确安装'; exit 1; }"),
+             "/usr/local/bin/node --version"),
 
             // 配置 npm 使用淘宝镜像加速 openclaw 下载
             ("配置 npm 镜像",

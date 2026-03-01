@@ -1,6 +1,7 @@
 using System.Diagnostics;
-using System.Net.Http;
+
 using System.Text;
+using System.Text.Json;
 
 namespace ClawDock.Services;
 
@@ -12,13 +13,19 @@ public class GatewayService
     private const int Port = 18789;
 
     private Process? _gatewayProcess;
-    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(2) };
 
     public event Action<GatewayStatus>? StatusChanged;
     /// <summary>Gateway 进程的 stdout/stderr 输出</summary>
     public event Action<string>? LogReceived;
 
     public string LastError { get; private set; } = string.Empty;
+
+    /// <summary>带 auth token 的 Gateway URL，供 WebView2 使用</summary>
+    public string DashboardUrl => string.IsNullOrEmpty(_authToken)
+        ? GatewayUrl
+        : $"{GatewayUrl}?token={_authToken}";
+
+    private string _authToken = string.Empty;
 
     // ── 启动 ─────────────────────────────────────────────────────────────
 
@@ -60,6 +67,8 @@ public class GatewayService
             await Task.Delay(1000);
             if (await IsRunningAsync())
             {
+                // Gateway 已启动，此时再读取 auth token（Gateway 启动时会重新生成 token）
+                await ReadAuthTokenAsync();
                 StatusChanged?.Invoke(GatewayStatus.Running);
                 return;
             }
@@ -84,8 +93,12 @@ public class GatewayService
             var line = await reader.ReadLineAsync();
             if (line is { Length: > 0 })
             {
-                LastError = line;          // 保留最后一行用于错误提示
-                LogReceived?.Invoke(line);
+                var clean = WslService.CleanLine(line);
+                if (clean.Length > 0 && !WslService.IsGarbledWslMessage(clean))
+                {
+                    LastError = clean;
+                    LogReceived?.Invoke(clean);
+                }
             }
         }
     }
@@ -118,8 +131,15 @@ public class GatewayService
     {
         try
         {
-            var response = await _http.GetAsync(GatewayUrl);
-            return response.IsSuccessStatusCode || (int)response.StatusCode < 500;
+            using var tcp = new System.Net.Sockets.TcpClient();
+            var connectTask = tcp.ConnectAsync("127.0.0.1", Port);
+            var timeoutTask = Task.Delay(2000);
+            if (await Task.WhenAny(connectTask, timeoutTask) == connectTask)
+            {
+                await connectTask; // 抛出连接异常（如果有）
+                return true;
+            }
+            return false;
         }
         catch
         {
@@ -129,4 +149,26 @@ public class GatewayService
 
     public async Task<GatewayStatus> GetStatusAsync()
         => await IsRunningAsync() ? GatewayStatus.Running : GatewayStatus.Stopped;
+
+    /// <summary>从 WSL 内的 openclaw 配置文件读取 auth token</summary>
+    private async Task ReadAuthTokenAsync()
+    {
+        try
+        {
+            var output = new StringBuilder();
+            await WslService.RunCommandStreamAsync("wsl",
+                $"-d {WslService.DistroName} --user root -- cat /root/.openclaw/openclaw.json",
+                line => output.AppendLine(line));
+            var json = JsonDocument.Parse(output.ToString());
+            _authToken = json.RootElement
+                .GetProperty("gateway")
+                .GetProperty("auth")
+                .GetProperty("token")
+                .GetString() ?? string.Empty;
+        }
+        catch
+        {
+            _authToken = string.Empty;
+        }
+    }
 }

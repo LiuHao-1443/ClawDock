@@ -352,7 +352,7 @@ public class WslService
     ///   3. 去除空字节及不可打印控制字符
     ///   4. 折叠多余空格
     /// </summary>
-    private static string CleanLine(string line)
+    internal static string CleanLine(string line)
     {
         // 去除 ANSI 转义序列，如 \x1B[32m \x1B[0K 等
         line = Regex.Replace(line, @"\x1B\[[0-9;]*[A-Za-z]", "");
@@ -373,7 +373,7 @@ public class WslService
     /// （wsl -d 执行 Linux 命令时，WSL 的网络/locale 等提示用 UTF-16LE 输出，
     ///  被 UTF-8 读取后变成含大量 Unicode 替换字符的乱码行）
     /// </summary>
-    private static bool IsGarbledWslMessage(string line)
+    internal static bool IsGarbledWslMessage(string line)
     {
         if (line.Length < 4) return false;
         // 统计非 ASCII 且非 CJK 的字符数量

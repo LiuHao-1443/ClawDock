@@ -37,9 +37,12 @@ public partial class UninstallWindow : Window
                 ct: _cts.Token);
 
             _done = true;
-            BtnUninstall.Content   = "✓ 完成";
-            BtnCancel.Content      = "关闭";
-            BtnCancel.IsEnabled    = true;
+            BtnUninstall.Content = "✓ 卸载完成，正在退出...";
+            BtnCancel.IsEnabled  = false;
+
+            // 短暂显示完成信息后自动退出
+            await Task.Delay(1500);
+            Application.Current.Shutdown();
         }
         catch (OperationCanceledException)
         {

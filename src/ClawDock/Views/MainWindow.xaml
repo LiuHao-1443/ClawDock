@@ -130,6 +130,25 @@
                     </StackPanel>
                 </Grid>
 
+                <!-- WSL 初始化中提示 -->
+                <Grid x:Name="PageInitializing" Visibility="Collapsed" Background="{StaticResource BgBrush}">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Image Source="/Assets/logo.png" Width="80" Height="80"
+                               HorizontalAlignment="Center" Margin="0,0,0,16"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <TextBlock Text="正在初始化运行环境..." FontSize="20" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock x:Name="InitStatusText" Text="正在启动 WSL 子系统，请稍候..."
+                                   FontSize="14"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                        <ProgressBar IsIndeterminate="True" Width="200" Height="4"
+                                     Foreground="{StaticResource AccentBrush}"
+                                     Background="Transparent" BorderThickness="0"/>
+                    </StackPanel>
+                </Grid>
+
             </Grid>
 
             <!-- 下方：日志控制台面板 -->

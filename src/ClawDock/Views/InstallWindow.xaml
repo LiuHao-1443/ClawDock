@@ -154,7 +154,7 @@
             </Grid.RowDefinitions>
 
             <!-- 步骤内容（用 Visibility 控制哪个显示） -->
-            <Grid Grid.Row="0" Margin="40,36,40,0">
+            <Grid Grid.Row="0" Margin="40,36,40,16">
 
                 <!-- ===== Step 1: 欢迎 ===== -->
                 <StackPanel x:Name="PageWelcome" Visibility="Visible">
