@@ -37,11 +37,11 @@ public class OpenClawService
 
         // 先验证 Ubuntu 可用
         var testCode = await WslService.RunCommandStreamAsync(
-            "wsl", "-d Ubuntu --user root -- echo ok",
+            "wsl", $"-d {WslService.DistroName} --user root -- echo ok",
             _ => { }, ct);
         if (testCode != 0)
             throw new InvalidOperationException(
-                "无法连接 Ubuntu WSL，请确认 WSL2 和 Ubuntu 已正确安装。");
+                "无法连接 ClawDock WSL 发行版，请确认 WSL2 已正确安装。");
 
         foreach (var (label, cmd) in steps)
         {
@@ -50,7 +50,7 @@ public class OpenClawService
 
             var exitCode = await WslService.RunCommandStreamAsync(
                 "wsl",
-                $"-d Ubuntu --user root -- bash -c \"{EscapeForBash(cmd)}\"",
+                $"-d {WslService.DistroName} --user root -- bash -c \"{EscapeForBash(cmd)}\"",
                 line => onLog("  " + line),
                 ct);
 

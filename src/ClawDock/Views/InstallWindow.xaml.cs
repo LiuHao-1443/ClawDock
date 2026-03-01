@@ -158,11 +158,11 @@ public partial class InstallWindow : Window
         CheckWinVersionText.Text = $"当前版本: Build {result.WindowsBuild} (需要 Build 19041+)";
         SetStatus(CheckWinVersionStatus, result.WindowsVersionOk ? StatusKind.Ok : StatusKind.Error);
 
-        SetStatus(CheckVirtStatus,   result.VirtualizationEnabled ? StatusKind.Ok : StatusKind.Warn);
+        SetStatus(CheckVirtStatus,   result.VirtualizationEnabled ? StatusKind.Ok : StatusKind.Error);
         SetStatus(CheckWslStatus,    result.Wsl2Installed    ? StatusKind.Ok : StatusKind.None);
-        SetStatus(CheckUbuntuStatus, result.UbuntuInstalled  ? StatusKind.Ok : StatusKind.None);
+        SetStatus(CheckUbuntuStatus, result.DistroInstalled  ? StatusKind.Ok : StatusKind.None);
 
-        _wslAlreadyInstalled = result.Wsl2Installed && result.UbuntuInstalled;
+        _wslAlreadyInstalled = result.Wsl2Installed && result.DistroInstalled;
 
         if (!result.WindowsVersionOk)
         {
@@ -174,7 +174,9 @@ public partial class InstallWindow : Window
         if (!result.VirtualizationEnabled)
         {
             CheckErrorBanner.Visibility = Visibility.Visible;
-            CheckErrorText.Text = "未检测到硬件虚拟化支持。请进入 BIOS 开启 VT-x / AMD-V，然后重试。";
+            CheckErrorText.Text = "未检测到硬件虚拟化（Hyper-V）支持。WSL2 需要硬件虚拟化才能运行。\n" +
+                "• 物理机：请进入 BIOS 开启 VT-x / AMD-V\n" +
+                "• 虚拟机：需要宿主机开启嵌套虚拟化";
             return;
         }
 
@@ -197,9 +199,9 @@ public partial class InstallWindow : Window
 
         try
         {
-            bool ok = await _wslService.InstallAsync(
+            bool ok = await Task.Run(() => _wslService.InstallAsync(
                 line => ((IProgress<string>)progress).Report(line),
-                _cts.Token);
+                _cts.Token));
 
             _needsReboot = !ok;
 
@@ -222,6 +224,8 @@ public partial class InstallWindow : Window
         catch (Exception ex)
         {
             ((IProgress<string>)progress).Report($"\n❌ 错误: {ex.Message}");
+            BtnNext.IsEnabled = true;
+            BtnNext.Content = "重试";
         }
     }
 
@@ -240,9 +244,9 @@ public partial class InstallWindow : Window
 
         try
         {
-            await _openClawService.InstallAsync(
+            await Task.Run(() => _openClawService.InstallAsync(
                 line => ((IProgress<string>)progress).Report(line),
-                _cts.Token);
+                _cts.Token));
 
             _stateService.MarkOpenClawDone();
             ClearResumeOnReboot();

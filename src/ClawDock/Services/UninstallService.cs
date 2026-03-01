@@ -28,7 +28,7 @@ public class UninstallService
         // 2. 卸载 WSL2 内的 OpenClaw
         onLog("▶ 卸载 ClawDock (npm uninstall -g)...");
         await WslService.RunCommandStreamAsync(
-            "wsl", "-d Ubuntu --user root -- bash -c \"npm uninstall -g openclaw 2>&1 || true\"",
+            "wsl", $"-d {WslService.DistroName} --user root -- bash -c \"npm uninstall -g openclaw 2>&1 || true\"",
             line => onLog("  " + line), ct);
         onLog("  ✓ OpenClaw 已从 WSL2 中卸载");
         onLog("");
@@ -36,11 +36,12 @@ public class UninstallService
         // 3. 可选：移除整个 Ubuntu 发行版
         if (removeUbuntu)
         {
-            onLog("▶ 移除 Ubuntu WSL2 发行版...");
+            onLog("▶ 移除 ClawDock WSL2 发行版...");
             await WslService.RunCommandStreamAsync(
-                "wsl", "--unregister Ubuntu",
-                line => onLog("  " + line), ct);
-            onLog("  ✓ Ubuntu 已移除");
+                "wsl", $"--unregister {WslService.DistroName}",
+                line => onLog("  " + line), ct,
+                System.Text.Encoding.Unicode);
+            onLog("  ✓ ClawDock 发行版已移除");
             onLog("");
         }
 

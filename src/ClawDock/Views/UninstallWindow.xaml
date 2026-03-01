@@ -21,7 +21,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,20">
             <TextBlock Text="卸载 ClawDock" FontSize="20" FontWeight="SemiBold"
                        Foreground="{StaticResource TextPrimaryBrush}"/>
-            <TextBlock Text="以下操作将从您的电脑上完整移除 OpenClaw" FontSize="13" Margin="0,6,0,0"
+            <TextBlock Text="以下操作将从您的电脑上完整移除 ClawDock" FontSize="13" Margin="0,6,0,0"
                        Foreground="{StaticResource TextSecondaryBrush}"/>
         </StackPanel>
 
@@ -64,10 +64,10 @@
                     <CheckBox x:Name="ChkRemoveUbuntu" VerticalAlignment="Center" Margin="0,0,10,0"
                               Foreground="{StaticResource TextPrimaryBrush}"/>
                     <StackPanel>
-                        <TextBlock Text="同时移除 Ubuntu WSL2 发行版" FontSize="13"
+                        <TextBlock Text="同时移除 ClawDock WSL2 发行版" FontSize="13"
                                    Foreground="{StaticResource TextPrimaryBrush}"/>
                         <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
-                            将删除 WSL2 中的整个 Ubuntu 环境（不影响 WSL2 本身）
+                            将删除 WSL2 中的 ClawDock 环境（不影响 WSL2 本身和其他发行版）
                         </TextBlock>
                     </StackPanel>
                 </StackPanel>

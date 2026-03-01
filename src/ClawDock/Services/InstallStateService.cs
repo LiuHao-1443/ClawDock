@@ -25,7 +25,7 @@ public class InstallState
     public bool Wsl2Installed { get; set; }
 
     [JsonPropertyName("ubuntuInstalled")]
-    public bool UbuntuInstalled { get; set; }
+    public bool DistroInstalled { get; set; }
 
     [JsonPropertyName("openclawInstalled")]
     public bool OpenClawInstalled { get; set; }
@@ -76,7 +76,7 @@ public class InstallStateService
     {
         var state = Load();
         state.Wsl2Installed = true;
-        state.UbuntuInstalled = true;
+        state.DistroInstalled = true;
         state.Phase = InstallPhase.Wsl2;
         Save(state);
     }

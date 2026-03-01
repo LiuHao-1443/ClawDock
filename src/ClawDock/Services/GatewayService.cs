@@ -35,7 +35,7 @@ public class GatewayService
             {
                 FileName = "wsl",
                 // 用 bash -l 登录 shell，确保 /usr/local/bin 在 PATH 中
-                Arguments = $"-d Ubuntu -- bash -l -c \"openclaw gateway --port {Port}\"",
+                Arguments = $"-d {WslService.DistroName} -- bash -l -c \"openclaw gateway --port {Port}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -95,7 +95,7 @@ public class GatewayService
     {
         await WslService.RunCommandStreamAsync(
             "wsl",
-            "-d Ubuntu -- bash -c \"pkill -f 'openclaw gateway' || true\"",
+            $"-d {WslService.DistroName} -- bash -c \"pkill -f 'openclaw gateway' || true\"",
             _ => { });
 
         _gatewayProcess?.Kill(entireProcessTree: true);
