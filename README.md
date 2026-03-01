@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.jpg" width="200" alt="ClawDock" />
+  <img src="assets/banner.png" width="200" alt="ClawDock" />
 </p>
 
 <h1 align="center">ClawDock</h1>
