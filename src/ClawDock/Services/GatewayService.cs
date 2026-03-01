@@ -35,7 +35,8 @@ public class GatewayService
             {
                 FileName = "wsl",
                 // 用 bash -l 登录 shell，确保 /usr/local/bin 在 PATH 中
-                Arguments = $"-d {WslService.DistroName} -- bash -l -c \"openclaw gateway --port {Port}\"",
+                // --allow-unconfigured 允许未配置时启动（首次安装后无需额外 setup）
+                Arguments = $"-d {WslService.DistroName} -- bash -l -c \"openclaw gateway --port {Port} --allow-unconfigured\"",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,

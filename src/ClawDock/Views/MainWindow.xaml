@@ -60,6 +60,13 @@
                     <!-- 分隔线 -->
                     <Rectangle Width="1" Height="20" Fill="{StaticResource BorderBrush}" Margin="8,0"/>
 
+                    <Button x:Name="BtnConsole" Content="⌨  控制台"
+                            Style="{StaticResource ToolbarButton}"
+                            Click="BtnConsoleToggle_Click"/>
+
+                    <!-- 分隔线 -->
+                    <Rectangle Width="1" Height="20" Fill="{StaticResource BorderBrush}" Margin="8,0"/>
+
                     <Button x:Name="BtnUninstall" Content="🗑  卸载"
                             Style="{StaticResource ToolbarButton}"
                             Foreground="{StaticResource ErrorBrush}"
@@ -80,41 +87,93 @@
 
         <!-- ===== 主内容区 ===== -->
         <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <!-- WebView2 浏览器 -->
-            <wv2:WebView2 x:Name="Browser"
-                          Visibility="Collapsed"/>
+            <!-- 上方：页面内容 -->
+            <Grid Grid.Row="0">
 
-            <!-- 未运行提示页 -->
-            <Grid x:Name="PageNotRunning" Background="{StaticResource BgBrush}">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <Image Source="/Assets/logo.png" Width="80" Height="80"
-                           HorizontalAlignment="Center" Margin="0,0,0,16"
-                           RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text="Gateway 未运行" FontSize="20" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}"
-                               HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                    <TextBlock Text="点击「启动」按钮启动 ClawDock Gateway" FontSize="14"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               HorizontalAlignment="Center" Margin="0,0,0,28"/>
-                    <Button Content="▶  启动 Gateway"
-                            Style="{StaticResource PrimaryButton}"
-                            HorizontalAlignment="Center"
-                            Click="BtnStart_Click"/>
-                </StackPanel>
+                <!-- WebView2 浏览器 -->
+                <wv2:WebView2 x:Name="Browser"
+                              Visibility="Collapsed"/>
+
+                <!-- 未运行提示页 -->
+                <Grid x:Name="PageNotRunning" Background="{StaticResource BgBrush}">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Image Source="/Assets/logo.png" Width="80" Height="80"
+                               HorizontalAlignment="Center" Margin="0,0,0,16"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <TextBlock Text="Gateway 未运行" FontSize="20" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="点击「启动」按钮启动 ClawDock Gateway" FontSize="14"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,0,0,28"/>
+                        <Button Content="▶  启动 Gateway"
+                                Style="{StaticResource PrimaryButton}"
+                                HorizontalAlignment="Center"
+                                Click="BtnStart_Click"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 正在启动提示 -->
+                <Grid x:Name="PageStarting" Visibility="Collapsed" Background="{StaticResource BgBrush}">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock Text="正在启动 ClawDock Gateway..." FontSize="16"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                        <ProgressBar IsIndeterminate="True" Width="200" Height="4"
+                                     Foreground="{StaticResource AccentBrush}"
+                                     Background="Transparent" BorderThickness="0"/>
+                    </StackPanel>
+                </Grid>
+
             </Grid>
 
-            <!-- 正在启动提示 -->
-            <Grid x:Name="PageStarting" Visibility="Collapsed" Background="{StaticResource BgBrush}">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="正在启动 ClawDock Gateway..." FontSize="16"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               HorizontalAlignment="Center" Margin="0,0,0,16"/>
-                    <ProgressBar IsIndeterminate="True" Width="200" Height="4"
-                                 Foreground="{StaticResource AccentBrush}"
-                                 Background="Transparent" BorderThickness="0"/>
-                </StackPanel>
-            </Grid>
+            <!-- 下方：日志控制台面板 -->
+            <Border x:Name="ConsolePanel" Grid.Row="1" Visibility="Collapsed"
+                    Background="#0A0A15"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Height="180">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="28"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 控制台标题栏 -->
+                    <Border Grid.Row="0" Background="#12122A"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <Grid Margin="10,0">
+                            <TextBlock Text="Console" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                        VerticalAlignment="Center">
+                                <Button Content="Clear" FontSize="11"
+                                        Style="{StaticResource ToolbarButton}"
+                                        Click="BtnConsoleClear_Click" Padding="6,2"/>
+                                <Button Content="✕" FontSize="12"
+                                        Style="{StaticResource ToolbarButton}"
+                                        Click="BtnConsoleToggle_Click" Padding="6,2"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 日志内容 -->
+                    <ScrollViewer x:Name="ConsoleScroll" Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="ConsoleText"
+                                   FontFamily="Cascadia Code, Consolas, monospace"
+                                   FontSize="12" Foreground="#A0C0A0"
+                                   Margin="10,6" TextWrapping="NoWrap"/>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
 
         </Grid>
     </Grid>

@@ -21,7 +21,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         _gateway.StatusChanged += OnGatewayStatusChanged;
-        _gateway.LogReceived   += line => System.Diagnostics.Debug.WriteLine("[Gateway] " + line);
+        _gateway.LogReceived   += OnGatewayLogReceived;
 
         // 定时轮询状态（每 5 秒）
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -41,7 +41,12 @@ public partial class MainWindow : Window
     {
         try
         {
-            await Browser.EnsureCoreWebView2Async();
+            var userDataDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ClawDock", "WebView2");
+            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(
+                userDataFolder: userDataDir);
+            await Browser.EnsureCoreWebView2Async(env);
             Browser.CoreWebView2.NewWindowRequested += (_, e) =>
             {
                 // 新窗口请求在同一个 WebView 内打开
@@ -237,5 +242,45 @@ public partial class MainWindow : Window
         _statusTimer.Stop();
         _ = _gateway.StopAsync();
         WpfApplication.Current.Shutdown();
+    }
+
+    // ── 日志控制台 ──────────────────────────────────────────────────────
+
+    private const int MaxConsoleLines = 500;
+    private int _consoleLineCount;
+
+    private void OnGatewayLogReceived(string line)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            // 超出行数时截断前半部分
+            if (_consoleLineCount >= MaxConsoleLines)
+            {
+                var text = ConsoleText.Text;
+                var half = text.IndexOf('\n', text.Length / 2);
+                if (half > 0)
+                {
+                    ConsoleText.Text = text[(half + 1)..];
+                    _consoleLineCount = MaxConsoleLines / 2;
+                }
+            }
+
+            ConsoleText.Text += (_consoleLineCount > 0 ? "\n" : "") + line;
+            _consoleLineCount++;
+            ConsoleScroll.ScrollToEnd();
+        });
+    }
+
+    private void BtnConsoleToggle_Click(object sender, RoutedEventArgs e)
+    {
+        ConsolePanel.Visibility = ConsolePanel.Visibility == Visibility.Visible
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private void BtnConsoleClear_Click(object sender, RoutedEventArgs e)
+    {
+        ConsoleText.Text = "";
+        _consoleLineCount = 0;
     }
 }
