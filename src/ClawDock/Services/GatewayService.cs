@@ -13,6 +13,7 @@ public class GatewayService
     private const int Port = 18789;
 
     private Process? _gatewayProcess;
+    private volatile bool _gatewayListening;
 
     public event Action<GatewayStatus>? StatusChanged;
     /// <summary>Gateway 进程的 stdout/stderr 输出</summary>
@@ -54,20 +55,23 @@ public class GatewayService
             EnableRaisingEvents = true
         };
 
+        _gatewayListening = false;
         _gatewayProcess.Exited += (_, _) => StatusChanged?.Invoke(GatewayStatus.Stopped);
         _gatewayProcess.Start();
 
         // 异步读取 stdout/stderr，输出到 LogReceived 事件
+        // 当检测到 "listening on" 时，设置 _gatewayListening 标志
         _ = ReadStreamAsync(_gatewayProcess.StandardOutput);
         _ = ReadStreamAsync(_gatewayProcess.StandardError);
 
-        // 等待 Gateway 响应（最多 30 秒）
-        for (int i = 0; i < 30; i++)
+        // 轮询等待 Gateway 就绪：日志检测 "listening on" 或 TCP 端口可连接
+        for (int i = 0; i < 60; i++)
         {
             await Task.Delay(1000);
-            if (await IsRunningAsync())
+
+            if (_gatewayListening || await IsRunningAsync())
             {
-                // Gateway 已启动，此时再读取 auth token（Gateway 启动时会重新生成 token）
+                // Gateway 已启动，读取 auth token（Gateway 启动时会重新生成）
                 await ReadAuthTokenAsync();
                 StatusChanged?.Invoke(GatewayStatus.Running);
                 return;
@@ -82,7 +86,7 @@ public class GatewayService
             }
         }
 
-        LastError = $"等待 Gateway 响应超时（30 秒），请检查 openclaw 是否正确安装。";
+        LastError = "等待 Gateway 响应超时（60 秒），请检查 openclaw 是否正确安装。";
         StatusChanged?.Invoke(GatewayStatus.Error);
     }
 
@@ -98,6 +102,10 @@ public class GatewayService
                 {
                     LastError = clean;
                     LogReceived?.Invoke(clean);
+
+                    // 检测 Gateway 就绪：日志中出现 "listening on" 表示已启动
+                    if (clean.Contains("listening on"))
+                        _gatewayListening = true;
                 }
             }
         }
