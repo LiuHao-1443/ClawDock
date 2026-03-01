@@ -4,74 +4,100 @@
 
 <h1 align="center">ClawDock</h1>
 
-<p align="center">OpenClaw 的 Windows 一键安装器 + 启动器</p>
+<p align="center">
+  One-click Windows installer & launcher for <a href="https://github.com/openclaw/openclaw">OpenClaw</a>
+</p>
 
-[OpenClaw](https://github.com/openclaw/openclaw) 是一款运行在自己设备上的个人 AI 助手平台，支持接入 WhatsApp、Telegram、Slack、Discord 等主流消息平台。官方暂无 Windows 原生安装方案，本项目提供：
+<p align="center">
+  English | <a href="README_CN.md">中文</a>
+</p>
 
-- **一键安装**：自动安装 WSL2、Ubuntu、Node.js 和 OpenClaw，无需任何命令行操作
-- **内置浏览器**：安装完成后直接在 App 内使用 OpenClaw Web UI
-- **Gateway 管理**：一键启动/停止/重启 OpenClaw Gateway
-- **系统托盘**：最小化后台运行，随时唤起
-- **完整卸载**：支持一键卸载并可选移除 Ubuntu 环境
+---
 
-## 系统要求
+[OpenClaw](https://github.com/openclaw/openclaw) is a self-hosted personal AI assistant platform that integrates with WhatsApp, Telegram, Slack, Discord, and other messaging services. There is currently no official Windows-native installation — **ClawDock** fills that gap by automating the entire WSL2 + Ubuntu + Node.js + OpenClaw setup into a single desktop application.
 
-- Windows 10 Build 19041+ 或 Windows 11
-- Microsoft Edge（WebView2，现代 Windows 自带）
-- 处理器需支持虚拟化（VT-x / AMD-V，绝大多数电脑默认开启）
+## Features
 
-## 安装流程
+- **One-Click Install** — Automatically provisions WSL2, imports an embedded Ubuntu 22.04 rootfs, installs Node.js 22 and OpenClaw. No terminal required.
+- **Built-in Browser** — Access the OpenClaw Web UI directly inside the app via WebView2 (Edge engine).
+- **Gateway Management** — Start / Stop / Restart the OpenClaw Gateway with one click. Real-time log console included.
+- **System Tray** — Minimize to tray and keep running in the background. Double-click the icon to restore.
+- **Clean Uninstall** — Remove OpenClaw and optionally the entire WSL2 distro with a single action.
 
-安装向导会自动完成以下步骤：
+## Requirements
 
-1. **系统检测** — 检查 Windows 版本、WSL2 状态
-2. **安装 WSL2** — 启用 WSL2 功能，从内置镜像导入 Ubuntu 22.04（无需联网下载）
-3. **安装 OpenClaw** — 在 WSL2 内安装 Node.js 22 + OpenClaw（使用国内镜像加速）
-4. **完成** — 进入主界面
+| Requirement | Details |
+|---|---|
+| **OS** | Windows 10 Build 19041+ or Windows 11 |
+| **WebView2** | Microsoft Edge (ships with modern Windows) |
+| **CPU** | Hardware virtualization support (VT-x / AMD-V, enabled by default on most machines) |
 
-## 本地构建
+## Installation Flow
 
-### 依赖
+The built-in setup wizard handles everything automatically:
+
+1. **System Check** — Verifies Windows version, WSL2 status, and virtualization support.
+2. **WSL2 Setup** — Enables WSL2 features and imports an embedded Ubuntu 22.04 image (offline, no download needed).
+3. **OpenClaw Install** — Installs Node.js 22 + OpenClaw inside WSL2 (uses China mirror for faster downloads).
+4. **Done** — Launches the main interface with the Gateway ready to start.
+
+> A reboot may be required after Step 2 if WSL2 was not previously enabled. The app will resume installation automatically after restart.
+
+## Build from Source
+
+### Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 
-### 构建步骤
+### Build
 
 ```powershell
-# 克隆项目
+# Clone
 git clone https://github.com/LiuHao-1443/ClawDock.git
 cd ClawDock
 
-# 一键构建（自动下载 Ubuntu rootfs + 编译）
+# Build (auto-downloads Ubuntu rootfs + compiles)
 .\build.ps1 -SkipInno
 ```
 
-> `ubuntu-base.tar.gz` 不在 git 仓库中，`build.ps1` 会自动从 USTC 镜像下载。
+> `ubuntu-base.tar.gz` is not tracked in git. The build script downloads it automatically from a [USTC mirror](https://mirrors.ustc.edu.cn).
 
-构建产物：
-- `src/ClawDock/bin/publish/ClawDock.exe` — 独立可执行文件（约 184MB，无需安装 .NET）
+### Output
 
-## 项目结构
+```
+src/ClawDock/bin/publish/ClawDock.exe   # Self-contained single-file executable (~184 MB, no .NET runtime needed)
+```
+
+## Project Structure
 
 ```
 ClawDock/
-├── src/ClawDock/             # C# WPF 主项目
-│   ├── Views/                # 安装向导 + 主窗口
-│   ├── Services/             # WSL2、Gateway、安装、卸载服务
-│   └── Assets/               # 图标等资源
-├── assets/                   # README 资源（banner 等）
-└── build.ps1                 # 一键构建脚本
+├── src/ClawDock/
+│   ├── Views/                  # WPF windows (Install wizard, Main, Uninstall)
+│   ├── Services/               # Core services
+│   │   ├── WslService.cs       #   WSL2 detection, installation & management
+│   │   ├── OpenClawService.cs  #   Node.js + OpenClaw installation
+│   │   ├── GatewayService.cs   #   Gateway process lifecycle & health checks
+│   │   ├── InstallStateService.cs  #   Persisted install state (registry)
+│   │   └── UninstallService.cs #   Clean removal of all components
+│   └── Assets/                 # Icon, logo, embedded Ubuntu rootfs
+├── assets/                     # README resources (banner)
+└── build.ps1                   # One-command build script
 ```
 
-## 技术栈
+## Tech Stack
 
-- **C# 12 + .NET 8 + WPF** — 原生 Windows UI
-- **Microsoft.Web.WebView2** — 内置浏览器（Edge 内核）
-- **WSL2 + Ubuntu 22.04** — OpenClaw 运行环境
+| Layer | Technology |
+|---|---|
+| **UI** | C# 12 / .NET 8 / WPF |
+| **Embedded Browser** | Microsoft.Web.WebView2 (Edge engine) |
+| **Runtime Environment** | WSL2 + Ubuntu 22.04 |
+| **OpenClaw Runtime** | Node.js 22 |
+
 ## License
 
 [MIT](LICENSE)
 
 ---
 
-> 本项目与 OpenClaw 官方无关，是社区贡献的 Windows 安装方案。
+> This is a community project and is not affiliated with the official OpenClaw team.
