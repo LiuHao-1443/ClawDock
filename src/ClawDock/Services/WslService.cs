@@ -197,6 +197,37 @@ public class WslService
             line => onLog("  " + line), ct);
         onLog("  ✓ 镜像配置完成");
 
+        // Step 4: 写入 wsl.conf — 禁用 Windows PATH 互通，启用 systemd
+        // 防止 WSL 把 Windows 的 node/npm 混入 PATH 导致版本冲突
+        onLog("");
+        onLog("▶ 配置 wsl.conf（禁用 Windows PATH 互通）...");
+        await RunCommandStreamAsync("wsl",
+            $"-d {DistroName} --user root -- bash -c \"" +
+            "cat > /etc/wsl.conf << 'WSLCONF'\n" +
+            "[interop]\n" +
+            "appendWindowsPath = false\n" +
+            "\n" +
+            "[boot]\n" +
+            "systemd = true\n" +
+            "WSLCONF" +
+            "\"",
+            line => onLog("  " + line), ct);
+        onLog("  ✓ wsl.conf 配置完成");
+
+        // 重启发行版使 wsl.conf 生效
+        onLog("  正在重启发行版以应用配置...");
+        await RunCommandStreamAsync("wsl", $"--terminate {DistroName}",
+            line => onLog("  " + line), ct, Encoding.Unicode);
+        await Task.Delay(2000, ct);
+        // 验证发行版可正常启动
+        var verifyCode = await RunCommandStreamAsync("wsl",
+            $"-d {DistroName} --user root -- echo ok",
+            _ => { }, ct);
+        if (verifyCode != 0)
+            throw new InvalidOperationException(
+                "重启发行版后无法连接，请手动检查 WSL 状态。");
+        onLog("  ✓ 发行版重启完成");
+
         onLog("");
         onLog("✓ WSL2 + ClawDock 环境安装完成");
         return true;
@@ -357,6 +388,6 @@ public class WslService
                 && c != '\u2713' && c != '\u2717')   // 排除 ✓ ✗
                 garbled++;
         }
-        return garbled >= 3;  // 3 个以上乱码字符 → 过滤掉
+        return garbled >= 1;  // 含乱码字符 → 过滤掉
     }
 }

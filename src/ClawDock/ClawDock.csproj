@@ -8,6 +8,9 @@
     <AssemblyName>ClawDock</AssemblyName>
     <RootNamespace>ClawDock</RootNamespace>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <Version>0.6.0</Version>
+    <Company>野生刘同学</Company>
+    <Authors>野生刘同学</Authors>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- 自包含发布，目标机器无需安装 .NET -->

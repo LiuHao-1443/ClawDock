@@ -17,22 +17,25 @@ public class OpenClawService
             ("更新软件包列表",
              $"{Env} apt-get update -q"),
 
-            ("安装 curl 和基础工具",
-             $"{Env} apt-get install -y -q curl ca-certificates"),
+            ("安装基础工具",
+             $"{Env} apt-get install -y -q curl ca-certificates git xz-utils"),
 
-            // 使用阿里云镜像加速 Node.js 安装脚本
-            ("添加 Node.js 22 源",
-             $"LANG=C curl -fsSL https://mirrors.aliyun.com/nodesource/deb/setup_22.x | LANG=C bash -"),
+            // 从淘宝 Node.js 镜像直接下载二进制包，避免依赖境外 NodeSource 源
+            ("下载并安装 Node.js 22",
+             "NODE_VER=$(curl -fsSL https://npmmirror.com/mirrors/node/latest-v22.x/SHASUMS256.txt | head -1 | sed 's/.*node-v//' | sed 's/-.*//') && " +
+             "echo Installing Node.js v$NODE_VER && " +
+             "curl -fsSL https://npmmirror.com/mirrors/node/v$NODE_VER/node-v$NODE_VER-linux-x64.tar.xz | tar -xJ --strip-components=1 -C /usr/local"),
 
-            ("安装 Node.js 22",
-             $"{Env} apt-get install -y -q nodejs"),
+            // 验证安装的 Node.js 版本确实为 v22.x
+            ("验证 Node.js 版本",
+             "/usr/local/bin/node --version | grep -q '^v22' || { echo 'ERROR: Node.js 22 未正确安装'; exit 1; }"),
 
             // 配置 npm 使用淘宝镜像加速 openclaw 下载
             ("配置 npm 镜像",
-             "npm config set registry https://registry.npmmirror.com"),
+             "/usr/local/bin/npm config set registry https://registry.npmmirror.com"),
 
-            ("全局安装 ClawDock",
-             "npm install -g openclaw@latest"),
+            ("全局安装 OpenClaw",
+             "/usr/local/bin/npm install -g openclaw@latest"),
         };
 
         // 先验证 Ubuntu 可用

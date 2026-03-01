@@ -1,4 +1,4 @@
-# build.ps1 — ClawDock 构建脚本
+﻿# build.ps1 — ClawDock 构建脚本
 # 依赖：.NET 8 SDK、Inno Setup 6（iscc.exe 在 PATH 中）
 
 param(
