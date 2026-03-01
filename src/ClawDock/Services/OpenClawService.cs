@@ -35,16 +35,28 @@ public class OpenClawService
              "npm install -g openclaw@latest"),
         };
 
+        // 先验证 Ubuntu 可用
+        var testCode = await WslService.RunCommandStreamAsync(
+            "wsl", "-d Ubuntu --user root -- echo ok",
+            _ => { }, ct);
+        if (testCode != 0)
+            throw new InvalidOperationException(
+                "无法连接 Ubuntu WSL，请确认 WSL2 和 Ubuntu 已正确安装。");
+
         foreach (var (label, cmd) in steps)
         {
             ct.ThrowIfCancellationRequested();
             onLog($"▶ {label}...");
 
-            await WslService.RunCommandStreamAsync(
+            var exitCode = await WslService.RunCommandStreamAsync(
                 "wsl",
                 $"-d Ubuntu --user root -- bash -c \"{EscapeForBash(cmd)}\"",
                 line => onLog("  " + line),
                 ct);
+
+            if (exitCode != 0)
+                throw new InvalidOperationException(
+                    $"「{label}」失败（退出码 {exitCode}）。请检查网络连接后重试。");
 
             onLog($"  ✓ {label} 完成");
             onLog("");

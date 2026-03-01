@@ -157,9 +157,12 @@ public class WslService
             {
                 Directory.CreateDirectory(UbuntuInstallDir);
 
-                await RunCommandStreamAsync("wsl",
+                var exitCode = await RunCommandStreamAsync("wsl",
                     $"--import Ubuntu \"{UbuntuInstallDir}\" \"{tarball}\" --version 2",
                     line => onLog("  " + line), ct);
+
+                if (exitCode != 0)
+                    onLog($"  ⚠ wsl --import 退出码: {exitCode}");
             }
             finally
             {
@@ -167,6 +170,11 @@ public class WslService
                 if (File.Exists(tarball))
                     File.Delete(tarball);
             }
+
+            // 验证 Ubuntu 是否真正导入成功
+            if (!IsUbuntuInstalled())
+                throw new InvalidOperationException(
+                    "Ubuntu 导入失败。请检查 WSL2 是否正常运行，或尝试在命令行手动执行: wsl --install");
 
             onLog("  ✓ Ubuntu 导入完成");
         }
@@ -243,7 +251,7 @@ public class WslService
         return (p.ExitCode, CleanLine(raw));
     }
 
-    public static async Task RunCommandStreamAsync(
+    public static async Task<int> RunCommandStreamAsync(
         string exe, string args,
         Action<string> onLine,
         CancellationToken ct = default)
@@ -290,6 +298,7 @@ public class WslService
 
         await Task.WhenAll(readOut, readErr);
         await p.WaitForExitAsync(ct);
+        return p.ExitCode;
     }
 
     /// <summary>
