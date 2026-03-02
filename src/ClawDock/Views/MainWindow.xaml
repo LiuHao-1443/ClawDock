@@ -40,37 +40,71 @@
 
                 <!-- 控制按钮 -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="BtnStart" Content="▶  启动"
-                            Style="{StaticResource ToolbarButton}"
-                            Click="BtnStart_Click" Margin="0,0,4,0"/>
-                    <Button x:Name="BtnStop" Content="⏹  停止"
-                            Style="{StaticResource ToolbarButton}"
-                            Click="BtnStop_Click" Margin="0,0,4,0"/>
-                    <Button x:Name="BtnRestart" Content="↺  重启"
-                            Style="{StaticResource ToolbarButton}"
-                            Click="BtnRestart_Click" Margin="0,0,4,0"/>
+                    <Button x:Name="BtnStart" Style="{StaticResource ToolbarButton}"
+                            Click="BtnStart_Click" Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="M8 5V19L19 12Z" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0"/>
+                            <TextBlock Text="启动" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="BtnStop" Style="{StaticResource ToolbarButton}"
+                            Click="BtnStop_Click" Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="M6 6H18V18H6Z" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0"/>
+                            <TextBlock Text="停止" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="BtnRestart" Style="{StaticResource ToolbarButton}"
+                            Click="BtnRestart_Click" Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="M17.65 6.35A7.958 7.958 0 0 0 12 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0"/>
+                            <TextBlock Text="重启" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
 
                     <!-- 分隔线 -->
                     <Rectangle Width="1" Height="20" Fill="{StaticResource BorderBrush}" Margin="8,0"/>
 
-                    <Button x:Name="BtnOpenBrowser" Content="🔗  在浏览器中打开"
-                            Style="{StaticResource ToolbarButton}"
-                            Click="BtnOpenBrowser_Click"/>
+                    <Button x:Name="BtnOpenBrowser" Style="{StaticResource ToolbarButton}"
+                            Click="BtnOpenBrowser_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0"/>
+                            <TextBlock Text="在浏览器中打开" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
 
                     <!-- 分隔线 -->
                     <Rectangle Width="1" Height="20" Fill="{StaticResource BorderBrush}" Margin="8,0"/>
 
-                    <Button x:Name="BtnConsole" Content="⌨  控制台"
-                            Style="{StaticResource ToolbarButton}"
-                            Click="BtnConsoleToggle_Click"/>
+                    <Button x:Name="BtnConsole" Style="{StaticResource ToolbarButton}"
+                            Click="BtnConsoleToggle_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v12zM7 10l4 3-4 3v-6zm6 5h4v2h-4v-2z"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  Width="16" Height="16" Stretch="Uniform" Margin="0,0,6,0"/>
+                            <TextBlock Text="控制台" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
 
                     <!-- 分隔线 -->
                     <Rectangle Width="1" Height="20" Fill="{StaticResource BorderBrush}" Margin="8,0"/>
 
-                    <Button x:Name="BtnUninstall" Content="🗑  卸载"
-                            Style="{StaticResource ToolbarButton}"
+                    <Button x:Name="BtnUninstall" Style="{StaticResource ToolbarButton}"
                             Foreground="{StaticResource ErrorBrush}"
-                            Click="BtnUninstall_Click"/>
+                            Click="BtnUninstall_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0"/>
+                            <TextBlock Text="卸载" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- 状态指示器 -->

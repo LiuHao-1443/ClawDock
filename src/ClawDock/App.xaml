@@ -61,6 +61,33 @@
             </Setter>
         </Style>
 
+        <!-- 危险按钮样式（卸载等） -->
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Background" Value="#C0392B"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E74C3C"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#333355"/>
+                                <Setter Property="Foreground" Value="#555577"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- 次要按钮样式 -->
         <Style x:Key="SecondaryButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
@@ -85,8 +112,9 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#1A2A3A"/>
-                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="border" Property="Background" Value="#252540"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#4A4A65"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

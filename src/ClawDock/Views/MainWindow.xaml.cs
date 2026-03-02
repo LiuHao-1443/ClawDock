@@ -68,16 +68,12 @@ public partial class MainWindow : Window
 
     private void OnGatewayStatusChanged(GatewayStatus status)
     {
-        Dispatcher.Invoke(() => ApplyStatus(status));
+        // 使用 BeginInvoke 避免死锁（StatusChanged 可能从线程池触发）
+        Dispatcher.BeginInvoke(() => ApplyStatus(status));
     }
-
-    private bool _operationInProgress;
 
     private async Task PollStatusAsync()
     {
-        // 操作进行中不轮询，避免干扰启动/停止/重启的状态转换
-        if (_operationInProgress) return;
-
         var status = await _gateway.GetStatusAsync();
         // 轮询只在状态变化时更新 UI，避免重复刷新 WebView2
         if (status != _lastStatus)
@@ -143,10 +139,29 @@ public partial class MainWindow : Window
         PageStarting.Visibility    = Visibility.Collapsed;
         PageInitializing.Visibility = Visibility.Collapsed;
 
-        // 只在首次切到运行状态时导航，避免反复刷新页面
-        if (!_browserNavigated)
+        var url = _gateway.DashboardUrl;
+
+        // token 已就绪 → 直接导航
+        if (url.Contains("token="))
         {
-            Browser.Source = new Uri(_gateway.DashboardUrl);
+            NavigateIfNeeded(url);
+            return;
+        }
+
+        // token 未就绪 → 后台读取，读完再导航（避免阻塞 UI 线程）
+        _ = Task.Run(() =>
+        {
+            _gateway.ReadAuthToken();
+            Dispatcher.Invoke(() => NavigateIfNeeded(_gateway.DashboardUrl));
+        });
+    }
+
+    private void NavigateIfNeeded(string url)
+    {
+        if (!_browserNavigated ||
+            (url.Contains("token=") && Browser.Source?.Query?.Contains("token=") != true))
+        {
+            Browser.Source = new Uri(url);
             _browserNavigated = true;
         }
     }
@@ -237,30 +252,14 @@ public partial class MainWindow : Window
 
     // ── 按钮事件 ──────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 执行 Gateway 操作，操作期间暂停状态轮询，避免干扰状态转换
-    /// </summary>
-    private async Task RunGatewayOperationAsync(Func<Task> operation)
-    {
-        _operationInProgress = true;
-        try
-        {
-            await Task.Run(operation);
-        }
-        finally
-        {
-            _operationInProgress = false;
-        }
-    }
+    private void BtnStart_Click(object sender, RoutedEventArgs e)
+        => _gateway.Start();
 
-    private async void BtnStart_Click(object sender, RoutedEventArgs e)
-        => await RunGatewayOperationAsync(() => _gateway.StartAsync());
-
-    private async void BtnStop_Click(object sender, RoutedEventArgs e)
-        => await RunGatewayOperationAsync(() => _gateway.StopAsync());
+    private void BtnStop_Click(object sender, RoutedEventArgs e)
+        => _gateway.StopAsync();
 
     private async void BtnRestart_Click(object sender, RoutedEventArgs e)
-        => await RunGatewayOperationAsync(() => _gateway.RestartAsync());
+        => await _gateway.RestartAsync();
 
     private void BtnOpenBrowser_Click(object sender, RoutedEventArgs e)
         => Process.Start(new ProcessStartInfo(_gateway.DashboardUrl) { UseShellExecute = true });
@@ -295,8 +294,8 @@ public partial class MainWindow : Window
         var menu = new System.Windows.Forms.ContextMenuStrip();
         menu.Items.Add("打开", null, (_, _) => ShowWindow());
         menu.Items.Add("-");
-        menu.Items.Add("启动 Gateway", null, (_, _) => _ = RunGatewayOperationAsync(() => _gateway.StartAsync()));
-        menu.Items.Add("停止 Gateway", null, (_, _) => _ = RunGatewayOperationAsync(() => _gateway.StopAsync()));
+        menu.Items.Add("启动 Gateway", null, (_, _) => _gateway.Start());
+        menu.Items.Add("停止 Gateway", null, (_, _) => _gateway.StopAsync());
         menu.Items.Add("-");
         menu.Items.Add("卸载 ClawDock", null, (_, _) => OpenUninstallWindow());
         menu.Items.Add("-");

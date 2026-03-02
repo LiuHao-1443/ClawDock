@@ -378,6 +378,8 @@ public class WslService
         if (line.Length < 4) return false;
         // 统计非 ASCII 且非 CJK 的字符数量
         // UTF-16LE 被当 UTF-8 读取后会产生 ◆(U+25C6)、替换字符(U+FFFD) 等
+        // 阈值设为 3：少量 unicode 符号（emoji、箭头等）是合法日志内容，
+        // 真正的 WSL 乱码会大量出现替换字符
         int garbled = 0;
         foreach (var c in line)
         {
@@ -385,9 +387,10 @@ public class WslService
                 && !(c >= '\u4E00' && c <= '\u9FFF') // 排除 CJK 汉字（合法中文）
                 && !(c >= '\u3000' && c <= '\u303F') // 排除 CJK 标点
                 && !(c >= '\uFF00' && c <= '\uFFEF') // 排除全角字符
-                && c != '\u2713' && c != '\u2717')   // 排除 ✓ ✗
+                && c != '\u2713' && c != '\u2717'    // 排除 ✓ ✗
+                && !char.IsSurrogate(c))             // 排除 emoji 代理对
                 garbled++;
         }
-        return garbled >= 1;  // 含乱码字符 → 过滤掉
+        return garbled >= 3;  // 3+ 乱码字符才判定为 WSL 乱码行
     }
 }
