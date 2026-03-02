@@ -301,7 +301,7 @@ public partial class InstallWindow : Window
                 tb.Foreground = (System.Windows.Media.Brush)FindResource("WarningBrush");
                 break;
             case StatusKind.None:
-                tb.Text = "—";
+                tb.Text = "–";
                 tb.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush");
                 break;
         }
