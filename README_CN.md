@@ -24,6 +24,10 @@
 - **系统托盘** — 最小化后台运行，双击图标随时唤起
 - **完整卸载** — 支持一键卸载 OpenClaw，可选同时移除 WSL2 发行版
 
+## 演示
+
+https://github.com/user-attachments/assets/7fb8b848-16af-44b1-9a49-f4d7339c3697
+
 ## 系统要求
 
 - Windows 10 Build 19041+ 或 Windows 11

@@ -24,6 +24,10 @@
 - **System Tray** — Minimize to tray and keep running in the background. Double-click the icon to restore.
 - **Clean Uninstall** — Remove OpenClaw and optionally the entire WSL2 distro with a single action.
 
+## Demo
+
+https://github.com/user-attachments/assets/7fb8b848-16af-44b1-9a49-f4d7339c3697
+
 ## Requirements
 
 | Requirement | Details |

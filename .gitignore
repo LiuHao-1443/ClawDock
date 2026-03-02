@@ -25,6 +25,9 @@ src/ClawDock/Assets/ubuntu-base.tar.gz
 # Docs (local design notes)
 docs/
 
+# Video files (hosted on GitHub user-attachments)
+*.mp4
+
 # OS
 .DS_Store
 Thumbs.db
