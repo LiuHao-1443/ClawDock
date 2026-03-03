@@ -55,8 +55,12 @@ public class WslService
     {
         try
         {
+            // Check both: firmware VT-x enabled OR hypervisor already running.
+            // When Hyper-V is active, VirtualizationFirmwareEnabled may return False
+            // even though VT-x is enabled in BIOS, because the CPU is already under
+            // the hypervisor's control. HypervisorPresent = True means it's working.
             var result = RunCommand("powershell",
-                "-NoProfile -Command \"(Get-WmiObject Win32_Processor).VirtualizationFirmwareEnabled\"");
+                "-NoProfile -Command \"$p = Get-WmiObject Win32_Processor; $c = Get-WmiObject Win32_ComputerSystem; ($p.VirtualizationFirmwareEnabled -eq $true) -or ($c.HypervisorPresent -eq $true)\"");
             var val = result.Output.Trim();
             return !val.Equals("False", StringComparison.OrdinalIgnoreCase);
         }
