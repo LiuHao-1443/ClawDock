@@ -164,25 +164,68 @@ public class WslService
                     File.Delete(tarball);
             }
 
-            // import 失败 → 区分"需要重启"和"硬件不支持虚拟化"
+            // import 失败 → 区分"内核过旧"、"硬件不支持虚拟化"、"需要重启"
             if (!IsDistroInstalled())
             {
-                try { Directory.Delete(DistroInstallDir, true); } catch { }
-
                 var output = importOutput.ToString();
 
-                if (output.Contains("HCS_E_HYPERV", StringComparison.OrdinalIgnoreCase))
+                // WSL 内核过旧 → 自动更新后重试 import
+                if (output.Contains("wsl2kernel", StringComparison.OrdinalIgnoreCase) ||
+                    output.Contains("需要更新", StringComparison.OrdinalIgnoreCase) ||
+                    output.Contains("kernel", StringComparison.OrdinalIgnoreCase))
                 {
                     onLog("");
-                    onLog("✗ 此计算机不支持硬件虚拟化（Hyper-V），无法运行 WSL2");
-                    throw new InvalidOperationException(
-                        "此计算机不支持硬件虚拟化（Hyper-V），无法运行 WSL2。\n" +
-                        "请在物理机或支持嵌套虚拟化的虚拟机上使用 ClawDock。");
+                    onLog("⚠ WSL2 内核版本过旧，正在自动更新...");
+                    await RunCommandStreamAsync("wsl", "--update",
+                        line => onLog("  " + line), ct, Encoding.Unicode);
+                    onLog("  ✓ WSL 内核更新完成，正在重试导入...");
+
+                    try { Directory.Delete(DistroInstallDir, true); } catch { }
+                    Directory.CreateDirectory(DistroInstallDir);
+
+                    // 重新解压 rootfs（前面已删除临时文件）
+                    var retryTarball = await ExtractEmbeddedRootfsAsync(onLog, ct);
+                    try
+                    {
+                        var retryCode = await RunCommandStreamAsync("wsl",
+                            $"--import {DistroName} \"{DistroInstallDir}\" \"{retryTarball}\" --version 2",
+                            line => onLog("  " + line), ct, Encoding.Unicode);
+
+                        if (retryCode != 0)
+                            onLog($"  ⚠ 重试 wsl --import 退出码: {retryCode}");
+                    }
+                    finally
+                    {
+                        if (File.Exists(retryTarball))
+                            File.Delete(retryTarball);
+                    }
                 }
 
-                onLog("");
-                onLog("⚠ 导入失败，可能需要重启计算机以激活 WSL2 虚拟化组件");
-                return false;  // 触发重启流程
+                // 重试后仍然失败
+                var kernelWasUpdated = output.Contains("wsl2kernel", StringComparison.OrdinalIgnoreCase) ||
+                    output.Contains("需要更新", StringComparison.OrdinalIgnoreCase) ||
+                    output.Contains("kernel", StringComparison.OrdinalIgnoreCase);
+
+                if (!IsDistroInstalled())
+                {
+                    try { Directory.Delete(DistroInstallDir, true); } catch { }
+
+                    if (output.Contains("HCS_E_HYPERV", StringComparison.OrdinalIgnoreCase))
+                    {
+                        onLog("");
+                        onLog("✗ 此计算机不支持硬件虚拟化（Hyper-V），无法运行 WSL2");
+                        throw new InvalidOperationException(
+                            "此计算机不支持硬件虚拟化（Hyper-V），无法运行 WSL2。\n" +
+                            "请在物理机或支持嵌套虚拟化的虚拟机上使用 ClawDock。");
+                    }
+
+                    onLog("");
+                    if (kernelWasUpdated)
+                        onLog("⚠ WSL 内核已更新，需要重启计算机以使更新生效");
+                    else
+                        onLog("⚠ 导入失败，可能需要重启计算机以激活 WSL2 虚拟化组件");
+                    return false;  // 触发重启流程
+                }
             }
 
             onLog("  ✓ 导入完成");
