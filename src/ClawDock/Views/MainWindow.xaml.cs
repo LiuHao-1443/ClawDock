@@ -201,6 +201,7 @@ public partial class MainWindow : Window
             _statusTimer.Start();
             ApplyStatus(GatewayStatus.Running);
             _ = LoadOpenClawVersionAsync();
+            _ = LoadModelNameAsync();
             return;
         }
 
@@ -235,6 +236,7 @@ public partial class MainWindow : Window
             {
                 ApplyStatus(GatewayStatus.Stopped);
                 _ = LoadOpenClawVersionAsync();
+                _ = LoadModelNameAsync();
             }
             else
             {
@@ -246,6 +248,20 @@ public partial class MainWindow : Window
                 ShowNotRunning();
             }
         });
+    }
+
+    private async Task LoadModelNameAsync()
+    {
+        try
+        {
+            var config = await _configService.ReadFullConfigAsync();
+            Dispatcher.Invoke(() =>
+            {
+                var model = config.Model.PrimaryModel;
+                ModelText.Text = string.IsNullOrEmpty(model) ? "" : $"· {model}";
+            });
+        }
+        catch { }
     }
 
     private async Task LoadOpenClawVersionAsync()
@@ -642,6 +658,9 @@ public partial class MainWindow : Window
                 }
                 CboProvider.SelectionChanged += CboProvider_SelectionChanged;
 
+                // Update status bar model name
+                ModelText.Text = string.IsNullOrEmpty(currentModel) ? "" : $"· {currentModel}";
+
                 // Load API key for initially selected provider
                 var initKey = "";
                 if (!string.IsNullOrEmpty(curProvider))
@@ -950,6 +969,7 @@ public partial class MainWindow : Window
             {
                 TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
                 TxtModelSaveStatus.Text = "保存成功";
+                ModelText.Text = string.IsNullOrEmpty(fullModel) ? "" : $"· {fullModel}";
             }
             else
             {

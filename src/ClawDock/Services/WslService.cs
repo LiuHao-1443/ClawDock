@@ -133,10 +133,23 @@ public class WslService
         // 始终运行（幂等），因为 wsl --status 可能成功但 VM Platform 未启用
         onLog("▶ 启用 WSL2 功能...");
 
-        await RunCommandStreamAsync("wsl", "--install --no-distribution",
-            line => onLog("  " + line), ct, Encoding.Unicode);
+        var installOutput = new StringBuilder();
+        var installExitCode = await RunCommandStreamAsync("wsl", "--install --no-distribution",
+            line => { installOutput.AppendLine(line); onLog("  " + line); }, ct, Encoding.Unicode);
 
         onPhase?.Invoke(InstallPhase.Wsl2Enabled);
+
+        // wsl --install 输出包含重启提示时，立即要求重启，避免后续 import 误导用户
+        if (!IsDistroInstalled() && installExitCode != 0)
+        {
+            var installOut = installOutput.ToString();
+            if (IsRebootRequired(installOut))
+            {
+                onLog("");
+                onLog("⚠ WSL2 功能已启用，需要重启计算机以激活");
+                return false;
+            }
+        }
 
         // Step 2: 从内嵌资源导入 Ubuntu rootfs 为 ClawDock 发行版
         if (!IsDistroInstalled())
@@ -149,6 +162,11 @@ public class WslService
             var importOutput = new StringBuilder();
             try
             {
+                // 清理可能残留的目录（上次安装中断或 import 部分完成）
+                if (Directory.Exists(DistroInstallDir))
+                {
+                    try { Directory.Delete(DistroInstallDir, true); } catch { }
+                }
                 Directory.CreateDirectory(DistroInstallDir);
                 var exitCode = await RunCommandStreamAsync("wsl",
                     $"--import {DistroName} \"{DistroInstallDir}\" \"{tarball}\" --version 2",
@@ -170,15 +188,16 @@ public class WslService
                 var output = importOutput.ToString();
 
                 // WSL 内核过旧 → 自动更新后重试 import
-                if (output.Contains("wsl2kernel", StringComparison.OrdinalIgnoreCase) ||
-                    output.Contains("需要更新", StringComparison.OrdinalIgnoreCase) ||
-                    output.Contains("kernel", StringComparison.OrdinalIgnoreCase))
+                if (IsKernelUpdateError(output))
                 {
                     onLog("");
                     onLog("⚠ WSL2 内核版本过旧，正在自动更新...");
-                    await RunCommandStreamAsync("wsl", "--update",
+                    var updateCode = await RunCommandStreamAsync("wsl", "--update",
                         line => onLog("  " + line), ct, Encoding.Unicode);
-                    onLog("  ✓ WSL 内核更新完成，正在重试导入...");
+                    if (updateCode == 0)
+                        onLog("  ✓ WSL 内核更新完成，正在重试导入...");
+                    else
+                        onLog("  ⚠ WSL 内核更新可能未成功，仍尝试重试导入...");
 
                     try { Directory.Delete(DistroInstallDir, true); } catch { }
                     Directory.CreateDirectory(DistroInstallDir);
@@ -202,9 +221,7 @@ public class WslService
                 }
 
                 // 重试后仍然失败
-                var kernelWasUpdated = output.Contains("wsl2kernel", StringComparison.OrdinalIgnoreCase) ||
-                    output.Contains("需要更新", StringComparison.OrdinalIgnoreCase) ||
-                    output.Contains("kernel", StringComparison.OrdinalIgnoreCase);
+                var kernelWasUpdated = IsKernelUpdateError(output);
 
                 if (!IsDistroInstalled())
                 {
@@ -313,6 +330,7 @@ public class WslService
         using var file = File.Create(tempPath);
         var buf = new byte[81920];
         long written = 0;
+        long lastReportedPct = -10;
         int read;
 
         while ((read = await stream.ReadAsync(buf, ct)) > 0)
@@ -320,7 +338,12 @@ public class WslService
             await file.WriteAsync(buf.AsMemory(0, read), ct);
             written += read;
             var pct = written * 100 / total;
-            onLog($"  解压中... {written / 1024 / 1024:0.0} MB / {total / 1024 / 1024:0.0} MB ({pct}%)");
+            // 每 10% 汇报一次，避免日志刷屏
+            if (pct - lastReportedPct >= 10 || written >= total)
+            {
+                onLog($"  解压中... {written / 1024 / 1024:0.0} MB / {total / 1024 / 1024:0.0} MB ({pct}%)");
+                lastReportedPct = pct;
+            }
         }
 
         onLog($"  ✓ 解压完成");
@@ -403,6 +426,38 @@ public class WslService
         await Task.WhenAll(readOut, readErr);
         await p.WaitForExitAsync(ct);
         return p.ExitCode;
+    }
+
+    /// <summary>
+    /// 判断 wsl --install 输出是否提示需要重启
+    /// </summary>
+    private static bool IsRebootRequired(string output)
+    {
+        return output.Contains("请重新启动", StringComparison.OrdinalIgnoreCase) ||
+               output.Contains("重启", StringComparison.OrdinalIgnoreCase) ||
+               output.Contains("restart", StringComparison.OrdinalIgnoreCase) ||
+               output.Contains("reboot", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 判断 wsl --import 的错误输出是否为内核版本过旧。
+    /// 比 Contains("kernel") 更精确，避免匹配 kernel32.dll 等无关错误。
+    /// </summary>
+    private static bool IsKernelUpdateError(string output)
+    {
+        // "wsl2kernel" 是 WSL 内核版本错误的特有标识
+        if (output.Contains("wsl2kernel", StringComparison.OrdinalIgnoreCase))
+            return true;
+        // 中文 "需要更新" 提示
+        if (output.Contains("需要更新", StringComparison.OrdinalIgnoreCase))
+            return true;
+        // "kernel version" / "kernel update" / "kernel needs" 等英文模式
+        if (Regex.IsMatch(output, @"kernel\s+(version|update|needs)", RegexOptions.IgnoreCase))
+            return true;
+        // "update the kernel" / "update.*wsl.*kernel" 等
+        if (Regex.IsMatch(output, @"update.*kernel", RegexOptions.IgnoreCase))
+            return true;
+        return false;
     }
 
     /// <summary>

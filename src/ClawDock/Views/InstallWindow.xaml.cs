@@ -147,6 +147,12 @@ public partial class InstallWindow : Window
                         System.Diagnostics.Process.Start("shutdown", "/r /t 5 /c \"ClawDock: WSL2 安装完成，正在重启...\"");
                         Application.Current.Shutdown();
                     }
+                    else
+                    {
+                        // 用户暂不重启，允许稍后重试
+                        _needsReboot = false;
+                        BtnNext.Content = "重试";
+                    }
                 }
                 else
                 {
@@ -269,6 +275,7 @@ public partial class InstallWindow : Window
             {
                 WriteLog("WSL2 安装完成，无需重启");
                 _stateService.MarkWsl2Done();
+                ClearResumeOnReboot(); // WSL 阶段已过，立即清除自启动项，避免 OpenClaw 失败后每次开机弹窗
                 BtnNext.IsEnabled = true;
                 NavigateTo(4);
                 _ = RunOpenClawInstallAsync();
