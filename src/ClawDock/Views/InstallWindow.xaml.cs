@@ -127,9 +127,9 @@ public partial class InstallWindow : Window
                 break;
 
             case 3:
-                // WSL2 安装后需要重启
                 if (_needsReboot)
                 {
+                    // WSL2 安装后需要重启
                     var result = MessageBox.Show(
                         "WSL2 安装完成，需要重启计算机才能继续。\n\n重启后请重新打开 ClawDock，安装将自动继续。\n\n是否立即重启？",
                         "重启计算机", MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -139,6 +139,16 @@ public partial class InstallWindow : Window
                         Application.Current.Shutdown();
                     }
                 }
+                else
+                {
+                    // 重试 WSL2 安装
+                    _ = RunWsl2InstallAsync();
+                }
+                break;
+
+            case 4:
+                // 重试 OpenClaw 安装
+                _ = RunOpenClawInstallAsync();
                 break;
 
             case 5:

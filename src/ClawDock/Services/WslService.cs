@@ -218,14 +218,23 @@ public class WslService
         onLog("  正在重启发行版以应用配置...");
         await RunCommandStreamAsync("wsl", $"--terminate {DistroName}",
             line => onLog("  " + line), ct, Encoding.Unicode);
-        await Task.Delay(2000, ct);
-        // 验证发行版可正常启动
-        var verifyCode = await RunCommandStreamAsync("wsl",
-            $"-d {DistroName} --user root -- echo ok",
-            _ => { }, ct);
-        if (verifyCode != 0)
+        await Task.Delay(3000, ct);
+        // 验证发行版可正常启动（启用 systemd 后冷启动较慢，最多重试 30 秒）
+        bool verified = false;
+        for (int i = 0; i < 15; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var verifyCode = await RunCommandStreamAsync("wsl",
+                $"-d {DistroName} --user root -- echo ok",
+                _ => { }, ct);
+            if (verifyCode == 0) { verified = true; break; }
+            onLog($"  等待发行版就绪... ({i + 1}/15)");
+            await Task.Delay(2000, ct);
+        }
+        if (!verified)
             throw new InvalidOperationException(
-                "重启发行版后无法连接，请手动检查 WSL 状态。");
+                "重启发行版后无法连接（已等待 30 秒），请确认 WSL2 已正确安装，" +
+                "并尝试手动运行: wsl -d ClawDock --user root -- echo ok");
         onLog("  ✓ 发行版重启完成");
 
         onLog("");

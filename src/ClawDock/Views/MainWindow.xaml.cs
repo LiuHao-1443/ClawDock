@@ -1,9 +1,12 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ClawDock.Services;
 using WpfApplication = System.Windows.Application;
+using WpfTextBox = System.Windows.Controls.TextBox;
+using WpfButton = System.Windows.Controls.Button;
 
 namespace ClawDock.Views;
 
@@ -11,6 +14,7 @@ public partial class MainWindow : Window
 {
     private readonly GatewayService _gateway = new();
     private readonly InstallStateService _stateService = new();
+    private readonly OpenClawConfigService _configService = new();
     private readonly DispatcherTimer _statusTimer;
     private System.Windows.Forms.NotifyIcon? _trayIcon;
 
@@ -138,6 +142,7 @@ public partial class MainWindow : Window
         PageNotRunning.Visibility  = Visibility.Collapsed;
         PageStarting.Visibility    = Visibility.Collapsed;
         PageInitializing.Visibility = Visibility.Collapsed;
+        PageSettings.Visibility    = Visibility.Collapsed;
 
         var url = _gateway.DashboardUrl;
 
@@ -172,6 +177,7 @@ public partial class MainWindow : Window
         PageNotRunning.Visibility  = Visibility.Collapsed;
         PageStarting.Visibility    = Visibility.Visible;
         PageInitializing.Visibility = Visibility.Collapsed;
+        PageSettings.Visibility    = Visibility.Collapsed;
     }
 
     private void ShowNotRunning()
@@ -180,6 +186,7 @@ public partial class MainWindow : Window
         PageNotRunning.Visibility  = Visibility.Visible;
         PageStarting.Visibility    = Visibility.Collapsed;
         PageInitializing.Visibility = Visibility.Collapsed;
+        PageSettings.Visibility    = Visibility.Collapsed;
         _browserNavigated = false;
     }
 
@@ -245,6 +252,7 @@ public partial class MainWindow : Window
         PageNotRunning.Visibility = Visibility.Collapsed;
         PageStarting.Visibility = Visibility.Collapsed;
         PageInitializing.Visibility = Visibility.Visible;
+        PageSettings.Visibility = Visibility.Collapsed;
 
         StatusDot.Fill = (SolidColorBrush)FindResource("WarningBrush");
         StatusText.Text = "初始化中...";
@@ -375,5 +383,587 @@ public partial class MainWindow : Window
     {
         ConsoleText.Text = "";
         _consoleLineCount = 0;
+    }
+
+    // ── 设置页 ──────────────────────────────────────────────────────────────
+
+    private bool _settingsLoaded;
+    private bool _settingsVisible;
+    private bool _apiKeyVisible;
+    private bool _providerKeyVisible;
+    private string _activeSettingsTab = "models";
+    private Dictionary<string, List<string>> _modelsByProvider = new();
+    private Dictionary<string, string> _providerApiKeys = new();
+
+    private void BtnSettings_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settingsVisible)
+        {
+            CloseSettings();
+            return;
+        }
+        ShowSettings();
+    }
+
+    private void ShowSettings()
+    {
+        _settingsVisible = true;
+        Browser.Visibility = Visibility.Collapsed;
+        PageNotRunning.Visibility = Visibility.Collapsed;
+        PageStarting.Visibility = Visibility.Collapsed;
+        PageInitializing.Visibility = Visibility.Collapsed;
+        PageSettings.Visibility = Visibility.Visible;
+
+        ApplySettingsTab();
+
+        if (!_settingsLoaded)
+            _ = LoadSettingsAsync();
+    }
+
+    private void CloseSettings()
+    {
+        _settingsVisible = false;
+        PageSettings.Visibility = Visibility.Collapsed;
+
+        // Restore the previous page based on last known status
+        switch (_lastStatus)
+        {
+            case GatewayStatus.Running:
+                ShowBrowser();
+                break;
+            case GatewayStatus.Starting:
+                ShowStarting();
+                break;
+            default:
+                ShowNotRunning();
+                break;
+        }
+    }
+
+    private void BtnSettingsBack_Click(object sender, RoutedEventArgs e) => CloseSettings();
+
+    // ── Tab 切换 ────────────────────────────────────────────────────────────
+
+    private void TabModels_Click(object sender, RoutedEventArgs e)
+    {
+        _activeSettingsTab = "models";
+        ApplySettingsTab();
+    }
+
+    private void TabChannels_Click(object sender, RoutedEventArgs e)
+    {
+        _activeSettingsTab = "channels";
+        ApplySettingsTab();
+    }
+
+    private void ApplySettingsTab()
+    {
+        var accentBrush = (SolidColorBrush)FindResource("AccentBrush");
+        var secondaryBrush = (SolidColorBrush)FindResource("TextSecondaryBrush");
+
+        if (_activeSettingsTab == "models")
+        {
+            SettingsTabModels.Visibility = Visibility.Visible;
+            SettingsTabChannels.Visibility = Visibility.Collapsed;
+            TabModels.Foreground = accentBrush;
+            TabChannels.Foreground = secondaryBrush;
+        }
+        else
+        {
+            SettingsTabModels.Visibility = Visibility.Collapsed;
+            SettingsTabChannels.Visibility = Visibility.Visible;
+            TabModels.Foreground = secondaryBrush;
+            TabChannels.Foreground = accentBrush;
+        }
+    }
+
+    // ── 服务商切换 → 更新模型列表 ──────────────────────────────────────────
+
+    private void CboProvider_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var provider = CboProvider.SelectedItem?.ToString();
+        CboPrimaryModel.Items.Clear();
+        if (provider != null && _modelsByProvider.TryGetValue(provider, out var models))
+        {
+            foreach (var m in models)
+                CboPrimaryModel.Items.Add(m);
+        }
+        CboPrimaryModel.Text = "";
+
+        // Load API key for selected provider
+        var apiKey = "";
+        if (provider != null)
+            _providerApiKeys.TryGetValue(provider, out apiKey);
+        apiKey ??= "";
+        PwdSelectedProviderKey.Password = apiKey;
+        TxtSelectedProviderKey.Text = apiKey;
+        TxtProviderApiKeyHint.Text = string.IsNullOrEmpty(provider)
+            ? "当前服务商的 API Key"
+            : $"{provider} 的 API Key";
+    }
+
+    // ── 加载配置 ────────────────────────────────────────────────────────────
+
+    private async Task LoadSettingsAsync()
+    {
+        SettingsLoading.Visibility = Visibility.Visible;
+        SettingsError.Visibility = Visibility.Collapsed;
+        SettingsTabModels.Visibility = Visibility.Collapsed;
+        SettingsTabChannels.Visibility = Visibility.Collapsed;
+
+        try
+        {
+            var configTask = _configService.ReadFullConfigAsync();
+            var modelsTask = _configService.ListAvailableModelsAsync();
+            await Task.WhenAll(configTask, modelsTask);
+            var config = configTask.Result;
+            var availableModels = modelsTask.Result;
+
+            Dispatcher.Invoke(() =>
+            {
+                // Group models by provider
+                _modelsByProvider.Clear();
+                foreach (var m in availableModels)
+                {
+                    var slash = m.IndexOf('/');
+                    if (slash <= 0) continue;
+                    var provider = m[..slash];
+                    if (!_modelsByProvider.ContainsKey(provider))
+                        _modelsByProvider[provider] = new List<string>();
+                    _modelsByProvider[provider].Add(m[(slash + 1)..]);
+                }
+
+                // Cache provider API keys from config
+                _providerApiKeys.Clear();
+                foreach (var p in config.Providers)
+                {
+                    if (!string.IsNullOrEmpty(p.ApiKey))
+                        _providerApiKeys[p.Name] = p.ApiKey;
+                }
+
+                // Populate provider dropdown
+                CboProvider.SelectionChanged -= CboProvider_SelectionChanged;
+                CboProvider.Items.Clear();
+                foreach (var p in _modelsByProvider.Keys.OrderBy(p => p))
+                    CboProvider.Items.Add(p);
+
+                // Pre-select provider from current model
+                var currentModel = config.Model.PrimaryModel;
+                var currentSlash = currentModel.IndexOf('/');
+                string curProvider = "";
+                if (currentSlash > 0)
+                {
+                    curProvider = currentModel[..currentSlash];
+                    CboProvider.SelectedItem = curProvider;
+                    CboPrimaryModel.Text = currentModel[(currentSlash + 1)..];
+                }
+                else
+                {
+                    CboPrimaryModel.Text = currentModel;
+                }
+                CboProvider.SelectionChanged += CboProvider_SelectionChanged;
+
+                // Load API key for initially selected provider
+                var initKey = "";
+                if (!string.IsNullOrEmpty(curProvider))
+                    _providerApiKeys.TryGetValue(curProvider, out initKey);
+                initKey ??= "";
+                PwdSelectedProviderKey.Password = initKey;
+                TxtSelectedProviderKey.Text = initKey;
+                TxtProviderApiKeyHint.Text = string.IsNullOrEmpty(curProvider)
+                    ? "当前服务商的 API Key"
+                    : $"{curProvider} 的 API Key";
+
+                // Fallback models
+                FallbackModelsList.Children.Clear();
+                foreach (var fb in config.Model.FallbackModels)
+                    AddFallbackModelRow(fb);
+
+                // Provider (load first one if exists)
+                if (config.Providers.Count > 0)
+                {
+                    var p = config.Providers[0];
+                    TxtProviderName.Text = p.Name;
+                    TxtProviderBaseUrl.Text = p.BaseUrl;
+                    PwdProviderApiKey.Password = p.ApiKey;
+                    TxtProviderApiKeyVisible.Text = p.ApiKey;
+
+                    // Select API type
+                    foreach (ComboBoxItem item in CboProviderApi.Items)
+                    {
+                        if (item.Content?.ToString() == p.Api)
+                        {
+                            CboProviderApi.SelectedItem = item;
+                            break;
+                        }
+                    }
+
+                    // Provider models
+                    ProviderModelsList.Children.Clear();
+                    foreach (var m in p.Models)
+                        AddProviderModelRow(m.Name, m.Id);
+                }
+
+                // Channels
+                foreach (var ch in config.Channels)
+                {
+                    switch (ch.Name)
+                    {
+                        case "telegram":
+                            ChkTelegramEnabled.IsChecked = ch.Enabled;
+                            if (ch.Properties.TryGetValue("botToken", out var tgToken))
+                                PwdTelegramToken.Password = tgToken;
+                            if (ch.Properties.TryGetValue("dmPolicy", out var tgDm))
+                                SelectComboItem(CboTelegramDmPolicy, tgDm);
+                            if (ch.Properties.TryGetValue("streaming", out var tgStream))
+                                ChkTelegramStreaming.IsChecked = tgStream == "true";
+                            break;
+                        case "discord":
+                            ChkDiscordEnabled.IsChecked = ch.Enabled;
+                            if (ch.Properties.TryGetValue("token", out var dcToken))
+                                PwdDiscordToken.Password = dcToken;
+                            if (ch.Properties.TryGetValue("mediaMaxMb", out var dcMedia))
+                                TxtDiscordMediaMaxMb.Text = dcMedia;
+                            break;
+                        case "slack":
+                            ChkSlackEnabled.IsChecked = ch.Enabled;
+                            if (ch.Properties.TryGetValue("botToken", out var slBot))
+                                PwdSlackBotToken.Password = slBot;
+                            if (ch.Properties.TryGetValue("appToken", out var slApp))
+                                PwdSlackAppToken.Password = slApp;
+                            break;
+                        case "whatsapp":
+                            ChkWhatsAppEnabled.IsChecked = ch.Enabled;
+                            if (ch.Properties.TryGetValue("dmPolicy", out var waDm))
+                                SelectComboItem(CboWhatsAppDmPolicy, waDm);
+                            break;
+                    }
+                }
+
+                SettingsLoading.Visibility = Visibility.Collapsed;
+                _settingsLoaded = true;
+                ApplySettingsTab();
+            });
+        }
+        catch (Exception ex)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                SettingsLoading.Visibility = Visibility.Collapsed;
+                SettingsError.Text = $"加载配置失败: {ex.Message}\n\n请确保 WSL 已启动且 OpenClaw 已安装。";
+                SettingsError.Visibility = Visibility.Visible;
+            });
+        }
+    }
+
+    private static void SelectComboItem(System.Windows.Controls.ComboBox combo, string value)
+    {
+        foreach (ComboBoxItem item in combo.Items)
+        {
+            if (item.Content?.ToString() == value)
+            {
+                combo.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    // ── 动态列表：备选模型 ──────────────────────────────────────────────────
+
+    private void AddFallbackModelRow(string value = "")
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var tb = new WpfTextBox
+        {
+            Text = value,
+            Style = (Style)FindResource("DarkTextBox")
+        };
+        Grid.SetColumn(tb, 0);
+        row.Children.Add(tb);
+
+        var btn = new WpfButton
+        {
+            Content = "✕",
+            Style = (Style)FindResource("SecondaryButton"),
+            Padding = new Thickness(10, 6, 10, 6),
+            Margin = new Thickness(6, 0, 0, 0),
+            FontSize = 12
+        };
+        btn.Click += (_, _) => FallbackModelsList.Children.Remove(row);
+        Grid.SetColumn(btn, 1);
+        row.Children.Add(btn);
+
+        FallbackModelsList.Children.Add(row);
+    }
+
+    private void BtnAddFallback_Click(object sender, RoutedEventArgs e) => AddFallbackModelRow();
+
+    // ── 动态列表：Provider 模型 ─────────────────────────────────────────────
+
+    private void AddProviderModelRow(string name = "", string id = "")
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var tbName = new WpfTextBox
+        {
+            Text = name,
+            Style = (Style)FindResource("DarkTextBox"),
+            Tag = "name"
+        };
+        tbName.SetValue(System.Windows.Controls.Primitives.TextBoxBase.TabIndexProperty, 0);
+        Grid.SetColumn(tbName, 0);
+        row.Children.Add(tbName);
+
+        var tbId = new WpfTextBox
+        {
+            Text = id,
+            Style = (Style)FindResource("DarkTextBox"),
+            Margin = new Thickness(6, 0, 0, 0),
+            Tag = "id"
+        };
+        Grid.SetColumn(tbId, 1);
+        row.Children.Add(tbId);
+
+        var btn = new WpfButton
+        {
+            Content = "✕",
+            Style = (Style)FindResource("SecondaryButton"),
+            Padding = new Thickness(10, 6, 10, 6),
+            Margin = new Thickness(6, 0, 0, 0),
+            FontSize = 12
+        };
+        btn.Click += (_, _) => ProviderModelsList.Children.Remove(row);
+        Grid.SetColumn(btn, 2);
+        row.Children.Add(btn);
+
+        ProviderModelsList.Children.Add(row);
+    }
+
+    private void BtnAddProviderModel_Click(object sender, RoutedEventArgs e) => AddProviderModelRow();
+
+    // ── API Key 显示/隐藏 ───────────────────────────────────────────────────
+
+    private void BtnToggleApiKey_Click(object sender, RoutedEventArgs e)
+    {
+        _apiKeyVisible = !_apiKeyVisible;
+        if (_apiKeyVisible)
+        {
+            TxtProviderApiKeyVisible.Text = PwdProviderApiKey.Password;
+            TxtProviderApiKeyVisible.Visibility = Visibility.Visible;
+            PwdProviderApiKey.Visibility = Visibility.Collapsed;
+            BtnToggleApiKey.Content = "隐藏";
+        }
+        else
+        {
+            PwdProviderApiKey.Password = TxtProviderApiKeyVisible.Text;
+            PwdProviderApiKey.Visibility = Visibility.Visible;
+            TxtProviderApiKeyVisible.Visibility = Visibility.Collapsed;
+            BtnToggleApiKey.Content = "显示";
+        }
+    }
+
+    // ── 服务商 API Key 显示/隐藏 ────────────────────────────────────────────
+
+    private void BtnToggleSelectedProviderKey_Click(object sender, RoutedEventArgs e)
+    {
+        _providerKeyVisible = !_providerKeyVisible;
+        if (_providerKeyVisible)
+        {
+            TxtSelectedProviderKey.Text = PwdSelectedProviderKey.Password;
+            TxtSelectedProviderKey.Visibility = Visibility.Visible;
+            PwdSelectedProviderKey.Visibility = Visibility.Collapsed;
+            BtnToggleSelectedProviderKey.Content = "隐藏";
+        }
+        else
+        {
+            PwdSelectedProviderKey.Password = TxtSelectedProviderKey.Text;
+            PwdSelectedProviderKey.Visibility = Visibility.Visible;
+            TxtSelectedProviderKey.Visibility = Visibility.Collapsed;
+            BtnToggleSelectedProviderKey.Content = "显示";
+        }
+    }
+
+    // ── 保存模型配置 ────────────────────────────────────────────────────────
+
+    private async void BtnSaveModels_Click(object sender, RoutedEventArgs e)
+    {
+        BtnSaveModels.IsEnabled = false;
+        TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("TextSecondaryBrush");
+        TxtModelSaveStatus.Text = "保存中...";
+
+        try
+        {
+            var selectedProvider = CboProvider.SelectedItem?.ToString() ?? "";
+            var modelName = CboPrimaryModel.Text?.Trim() ?? "";
+            var fullModel = !string.IsNullOrEmpty(selectedProvider) && !string.IsNullOrEmpty(modelName) && !modelName.Contains("/")
+                ? $"{selectedProvider}/{modelName}" : modelName;
+
+            var modelConfig = new ModelConfig
+            {
+                PrimaryModel = fullModel
+            };
+
+            // Collect fallback models
+            foreach (var child in FallbackModelsList.Children)
+            {
+                if (child is Grid row)
+                {
+                    foreach (var c in row.Children)
+                    {
+                        if (c is WpfTextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
+                            modelConfig.FallbackModels.Add(tb.Text.Trim());
+                    }
+                }
+            }
+
+            var failures = await _configService.SaveModelConfigAsync(modelConfig);
+
+            // Save API key for selected provider
+            var providerKeyValue = _providerKeyVisible
+                ? TxtSelectedProviderKey.Text?.Trim() ?? ""
+                : PwdSelectedProviderKey.Password ?? "";
+            failures.Add($"[DEBUG] provider={selectedProvider}, keyLen={providerKeyValue.Length}, _providerKeyVisible={_providerKeyVisible}");
+            if (!string.IsNullOrEmpty(selectedProvider) && !string.IsNullOrEmpty(providerKeyValue))
+            {
+                try
+                {
+                    if (!await _configService.SaveProviderApiKeyAsync(selectedProvider, providerKeyValue))
+                        failures.Add($"models.providers.{selectedProvider}.apiKey");
+                    else
+                        _providerApiKeys[selectedProvider] = providerKeyValue;
+                }
+                catch (Exception ex2)
+                {
+                    failures.Add($"[EX] {ex2.Message}");
+                }
+            }
+
+            // Save custom provider if name is specified
+            var providerName = TxtProviderName.Text?.Trim();
+            if (!string.IsNullOrEmpty(providerName))
+            {
+                var provider = new ProviderConfig
+                {
+                    Name = providerName,
+                    BaseUrl = TxtProviderBaseUrl.Text?.Trim() ?? "",
+                    ApiKey = _apiKeyVisible
+                        ? TxtProviderApiKeyVisible.Text?.Trim() ?? ""
+                        : PwdProviderApiKey.Password ?? "",
+                    Api = (CboProviderApi.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "openai"
+                };
+
+                // Collect provider models (each row has Name + ID textboxes)
+                foreach (var child in ProviderModelsList.Children)
+                {
+                    if (child is Grid row)
+                    {
+                        string? mName = null, mId = null;
+                        foreach (var c in row.Children)
+                        {
+                            if (c is WpfTextBox tb)
+                            {
+                                if (tb.Tag?.ToString() == "name") mName = tb.Text?.Trim();
+                                else if (tb.Tag?.ToString() == "id") mId = tb.Text?.Trim();
+                            }
+                        }
+                        if (!string.IsNullOrWhiteSpace(mName))
+                            provider.Models.Add(new ProviderModel { Name = mName!, Id = mId ?? mName! });
+                    }
+                }
+
+                var pf = await _configService.SaveProviderAsync(provider);
+                failures.AddRange(pf);
+            }
+
+            if (failures.Count == 0)
+            {
+                TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
+                TxtModelSaveStatus.Text = "保存成功";
+            }
+            else
+            {
+                OpenClawConfigService.LogExt($"Save failures: {string.Join(", ", failures)}");
+                TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+                TxtModelSaveStatus.Text = $"部分保存失败: {string.Join(", ", failures)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+            TxtModelSaveStatus.Text = $"保存失败: {ex.Message}";
+        }
+        finally
+        {
+            BtnSaveModels.IsEnabled = true;
+        }
+    }
+
+    // ── 保存渠道配置 ────────────────────────────────────────────────────────
+
+    private async void BtnSaveChannels_Click(object sender, RoutedEventArgs e)
+    {
+        BtnSaveChannels.IsEnabled = false;
+        TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("TextSecondaryBrush");
+        TxtChannelSaveStatus.Text = "保存中...";
+
+        try
+        {
+            var allFailures = new List<string>();
+
+            // Telegram
+            var telegram = new ChannelConfig { Name = "telegram", Enabled = ChkTelegramEnabled.IsChecked == true };
+            if (!string.IsNullOrEmpty(PwdTelegramToken.Password))
+                telegram.Properties["botToken"] = PwdTelegramToken.Password;
+            telegram.Properties["dmPolicy"] = (CboTelegramDmPolicy.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "allow";
+            telegram.Properties["streaming"] = ChkTelegramStreaming.IsChecked == true ? "true" : "false";
+            allFailures.AddRange(await _configService.SaveChannelAsync(telegram));
+
+            // Discord
+            var discord = new ChannelConfig { Name = "discord", Enabled = ChkDiscordEnabled.IsChecked == true };
+            if (!string.IsNullOrEmpty(PwdDiscordToken.Password))
+                discord.Properties["token"] = PwdDiscordToken.Password;
+            if (!string.IsNullOrEmpty(TxtDiscordMediaMaxMb.Text))
+                discord.Properties["mediaMaxMb"] = TxtDiscordMediaMaxMb.Text.Trim();
+            allFailures.AddRange(await _configService.SaveChannelAsync(discord));
+
+            // Slack
+            var slack = new ChannelConfig { Name = "slack", Enabled = ChkSlackEnabled.IsChecked == true };
+            if (!string.IsNullOrEmpty(PwdSlackBotToken.Password))
+                slack.Properties["botToken"] = PwdSlackBotToken.Password;
+            if (!string.IsNullOrEmpty(PwdSlackAppToken.Password))
+                slack.Properties["appToken"] = PwdSlackAppToken.Password;
+            allFailures.AddRange(await _configService.SaveChannelAsync(slack));
+
+            // WhatsApp
+            var whatsapp = new ChannelConfig { Name = "whatsapp", Enabled = ChkWhatsAppEnabled.IsChecked == true };
+            whatsapp.Properties["dmPolicy"] = (CboWhatsAppDmPolicy.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "allow";
+            allFailures.AddRange(await _configService.SaveChannelAsync(whatsapp));
+
+            if (allFailures.Count == 0)
+            {
+                TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
+                TxtChannelSaveStatus.Text = "保存成功";
+            }
+            else
+            {
+                TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+                TxtChannelSaveStatus.Text = $"部分保存失败: {string.Join(", ", allFailures)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+            TxtChannelSaveStatus.Text = $"保存失败: {ex.Message}";
+        }
+        finally
+        {
+            BtnSaveChannels.IsEnabled = true;
+        }
     }
 }

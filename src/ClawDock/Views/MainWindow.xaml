@@ -95,6 +95,19 @@
                     <!-- 分隔线 -->
                     <Rectangle Width="1" Height="20" Fill="{StaticResource BorderBrush}" Margin="8,0"/>
 
+                    <Button x:Name="BtnSettings" Style="{StaticResource ToolbarButton}"
+                            Click="BtnSettings_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  Width="15" Height="15" Stretch="Uniform" Margin="0,0,6,0"/>
+                            <TextBlock Text="设置" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- 分隔线 -->
+                    <Rectangle Width="1" Height="20" Fill="{StaticResource BorderBrush}" Margin="8,0"/>
+
                     <Button x:Name="BtnUninstall" Style="{StaticResource ToolbarButton}"
                             Foreground="{StaticResource ErrorBrush}"
                             Click="BtnUninstall_Click">
@@ -181,6 +194,310 @@
                                      Foreground="{StaticResource AccentBrush}"
                                      Background="Transparent" BorderThickness="0"/>
                     </StackPanel>
+                </Grid>
+
+                <!-- ===== 设置页 ===== -->
+                <Grid x:Name="PageSettings" Visibility="Collapsed" Background="{StaticResource BgBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="160"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 左侧 Tab 侧栏 -->
+                    <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 顶部：返回 + 标题 -->
+                            <Border Grid.Row="0" BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="0,0,0,1" Padding="12,12">
+                                <Grid>
+                                    <Button x:Name="BtnSettingsBack" Style="{StaticResource ToolbarButton}"
+                                            Click="BtnSettingsBack_Click"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                                            Padding="6,4">
+                                        <Path Data="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"
+                                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                              Width="16" Height="16" Stretch="Uniform"/>
+                                    </Button>
+                                    <TextBlock Text="设置" FontSize="15" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Tab 列表 -->
+                            <StackPanel Grid.Row="1" Margin="8,8,8,0">
+                                <Button x:Name="TabModels" Style="{StaticResource ToolbarButton}"
+                                        Click="TabModels_Click"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                        Padding="12,9" Margin="0,0,0,2"
+                                        Content="模型配置" FontSize="13"/>
+
+                                <Button x:Name="TabChannels" Style="{StaticResource ToolbarButton}"
+                                        Click="TabChannels_Click"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                        Padding="12,9" Margin="0,0,0,2"
+                                        Content="渠道配置" FontSize="13"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 右侧内容区 -->
+                    <Grid Grid.Column="1">
+                        <!-- 加载中/错误提示 -->
+                        <Grid x:Name="SettingsLoading" Visibility="Collapsed">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <ProgressBar IsIndeterminate="True" Width="200" Height="4"
+                                             Foreground="{StaticResource AccentBrush}"
+                                             Background="Transparent" BorderThickness="0"/>
+                                <TextBlock Text="正在加载配置..." FontSize="14"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock x:Name="SettingsError" Visibility="Collapsed"
+                                   Foreground="{StaticResource ErrorBrush}"
+                                   FontSize="14" Margin="30,30"
+                                   TextWrapping="Wrap"/>
+
+                        <!-- ===== 模型配置 Tab ===== -->
+                        <ScrollViewer x:Name="SettingsTabModels" Visibility="Collapsed"
+                                      VerticalScrollBarVisibility="Auto" Padding="30,24,30,30">
+                            <StackPanel MaxWidth="600">
+                                <TextBlock Text="模型配置" FontSize="20" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
+                                <TextBlock Text="配置 AI 模型和 Provider" Style="{StaticResource FieldHint}"
+                                           Margin="0,0,0,24"/>
+
+                                <!-- 主模型 -->
+                                <TextBlock Text="服务商" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="CboProvider" Style="{StaticResource DarkComboBoxReadOnly}"
+                                          ItemContainerStyle="{StaticResource DarkComboBoxItem}"/>
+                                <TextBlock Text="选择模型服务商" Style="{StaticResource FieldHint}"
+                                           Margin="0,4,0,12"/>
+
+                                <TextBlock Text="模型" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="CboPrimaryModel" Style="{StaticResource DarkComboBox}"
+                                          ItemContainerStyle="{StaticResource DarkComboBoxItem}"/>
+                                <TextBlock Text="用于对话的默认模型，可从列表选择或手动输入完整名称（如 openai/gpt-4o）" Style="{StaticResource FieldHint}"
+                                           Margin="0,4,0,12"/>
+
+                                <!-- 服务商 API Key -->
+                                <TextBlock Text="API Key" Style="{StaticResource FieldLabel}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <PasswordBox x:Name="PwdSelectedProviderKey" Style="{StaticResource DarkPasswordBox}"/>
+                                    <TextBox x:Name="TxtSelectedProviderKey" Style="{StaticResource DarkTextBox}"
+                                             Visibility="Collapsed"/>
+                                    <Button x:Name="BtnToggleSelectedProviderKey" Grid.Column="1"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Content="显示" Click="BtnToggleSelectedProviderKey_Click"
+                                            Padding="12,8" Margin="6,0,0,0" FontSize="12"/>
+                                </Grid>
+                                <TextBlock x:Name="TxtProviderApiKeyHint" Text="当前服务商的 API Key" Style="{StaticResource FieldHint}"
+                                           Margin="0,4,0,20"/>
+
+                                <!-- 备选模型 -->
+                                <TextBlock Text="备选模型" Style="{StaticResource FieldLabel}"/>
+                                <StackPanel x:Name="FallbackModelsList"/>
+                                <Button x:Name="BtnAddFallback" Content="+ 添加备选模型"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Click="BtnAddFallback_Click"
+                                        HorizontalAlignment="Left" Padding="16,6"
+                                        FontSize="12" Margin="0,6,0,20"/>
+
+                                <!-- Provider 配置 -->
+                                <TextBlock Text="自定义 Provider" Style="{StaticResource FieldLabel}" Margin="0,8,0,6"/>
+                                <TextBlock Text="配置自定义模型提供商（如 OpenAI 兼容 API）"
+                                           Style="{StaticResource FieldHint}" Margin="0,0,0,12"/>
+
+                                <Border Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="20,16"
+                                        Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <TextBlock Text="Provider 名称" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox x:Name="TxtProviderName" Style="{StaticResource DarkTextBox}"
+                                                 Margin="0,0,0,12"/>
+
+                                        <TextBlock Text="Base URL" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox x:Name="TxtProviderBaseUrl" Style="{StaticResource DarkTextBox}"
+                                                 Margin="0,0,0,12"/>
+                                        <TextBlock Text="例如: https://api.openai.com/v1" Style="{StaticResource FieldHint}"
+                                                   Margin="0,-8,0,12"/>
+
+                                        <TextBlock Text="API Key" Style="{StaticResource FieldLabel}"/>
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <PasswordBox x:Name="PwdProviderApiKey" Style="{StaticResource DarkPasswordBox}"/>
+                                            <Button x:Name="BtnToggleApiKey" Grid.Column="1"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    Content="显示" Click="BtnToggleApiKey_Click"
+                                                    Padding="12,8" Margin="6,0,0,0" FontSize="12"/>
+                                        </Grid>
+                                        <!-- Hidden TextBox for showing API key -->
+                                        <TextBox x:Name="TxtProviderApiKeyVisible" Style="{StaticResource DarkTextBox}"
+                                                 Visibility="Collapsed" Margin="0,-12,0,12"/>
+
+                                        <TextBlock Text="API 类型" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox x:Name="CboProviderApi" Style="{StaticResource DarkComboBox}"
+                                                  IsEditable="False" Margin="0,0,0,12">
+                                            <ComboBoxItem Content="openai" Style="{StaticResource DarkComboBoxItem}" IsSelected="True"/>
+                                            <ComboBoxItem Content="anthropic" Style="{StaticResource DarkComboBoxItem}"/>
+                                            <ComboBoxItem Content="google" Style="{StaticResource DarkComboBoxItem}"/>
+                                        </ComboBox>
+
+                                        <TextBlock Text="模型列表" Style="{StaticResource FieldLabel}"/>
+                                        <TextBlock Text="每个模型需要 Name（显示名）和 ID（API 模型标识）"
+                                                   Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
+                                        <StackPanel x:Name="ProviderModelsList"/>
+                                        <Button x:Name="BtnAddProviderModel" Content="+ 添加模型"
+                                                Style="{StaticResource SecondaryButton}"
+                                                Click="BtnAddProviderModel_Click"
+                                                HorizontalAlignment="Left" Padding="16,6"
+                                                FontSize="12" Margin="0,6,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 保存按钮 + 状态 -->
+                                <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                                    <Button x:Name="BtnSaveModels" Content="保存模型配置"
+                                            Style="{StaticResource PrimaryButton}"
+                                            Click="BtnSaveModels_Click"
+                                            Padding="24,10"/>
+                                    <TextBlock x:Name="TxtModelSaveStatus"
+                                               VerticalAlignment="Center" Margin="16,0,0,0"
+                                               FontSize="13"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- ===== 渠道配置 Tab ===== -->
+                        <ScrollViewer x:Name="SettingsTabChannels" Visibility="Collapsed"
+                                      VerticalScrollBarVisibility="Auto" Padding="30,24,30,30">
+                            <StackPanel MaxWidth="600">
+                                <TextBlock Text="渠道配置" FontSize="20" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
+                                <TextBlock Text="配置消息渠道（Telegram、Discord、Slack、WhatsApp）"
+                                           Style="{StaticResource FieldHint}" Margin="0,0,0,24"/>
+
+                                <!-- Telegram -->
+                                <Border Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="20,16"
+                                        Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                            <TextBlock Text="Telegram" FontSize="16" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <CheckBox x:Name="ChkTelegramEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Bot Token" Style="{StaticResource FieldLabel}"/>
+                                        <PasswordBox x:Name="PwdTelegramToken" Style="{StaticResource DarkPasswordBox}"
+                                                     Margin="0,0,0,12"/>
+                                        <TextBlock Text="DM Policy" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox x:Name="CboTelegramDmPolicy" Style="{StaticResource DarkComboBox}"
+                                                  IsEditable="False" Margin="0,0,0,12">
+                                            <ComboBoxItem Content="allow" Style="{StaticResource DarkComboBoxItem}" IsSelected="True"/>
+                                            <ComboBoxItem Content="deny" Style="{StaticResource DarkComboBoxItem}"/>
+                                        </ComboBox>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Streaming" Style="{StaticResource FieldLabel}"
+                                                       VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                            <CheckBox x:Name="ChkTelegramStreaming" Style="{StaticResource ToggleSwitch}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Discord -->
+                                <Border Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="20,16"
+                                        Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                            <TextBlock Text="Discord" FontSize="16" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <CheckBox x:Name="ChkDiscordEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Bot Token" Style="{StaticResource FieldLabel}"/>
+                                        <PasswordBox x:Name="PwdDiscordToken" Style="{StaticResource DarkPasswordBox}"
+                                                     Margin="0,0,0,12"/>
+                                        <TextBlock Text="Media Max MB" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox x:Name="TxtDiscordMediaMaxMb" Style="{StaticResource DarkTextBox}"
+                                                 Margin="0,0,0,4"/>
+                                        <TextBlock Text="最大媒体文件大小（MB）" Style="{StaticResource FieldHint}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Slack -->
+                                <Border Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="20,16"
+                                        Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                            <TextBlock Text="Slack" FontSize="16" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <CheckBox x:Name="ChkSlackEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Bot Token" Style="{StaticResource FieldLabel}"/>
+                                        <PasswordBox x:Name="PwdSlackBotToken" Style="{StaticResource DarkPasswordBox}"
+                                                     Margin="0,0,0,12"/>
+                                        <TextBlock Text="App Token" Style="{StaticResource FieldLabel}"/>
+                                        <PasswordBox x:Name="PwdSlackAppToken" Style="{StaticResource DarkPasswordBox}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- WhatsApp -->
+                                <Border Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="20,16"
+                                        Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                            <TextBlock Text="WhatsApp" FontSize="16" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <CheckBox x:Name="ChkWhatsAppEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="DM Policy" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox x:Name="CboWhatsAppDmPolicy" Style="{StaticResource DarkComboBox}"
+                                                  IsEditable="False">
+                                            <ComboBoxItem Content="allow" Style="{StaticResource DarkComboBoxItem}" IsSelected="True"/>
+                                            <ComboBoxItem Content="deny" Style="{StaticResource DarkComboBoxItem}"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 保存按钮 + 状态 -->
+                                <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                                    <Button x:Name="BtnSaveChannels" Content="保存渠道配置"
+                                            Style="{StaticResource PrimaryButton}"
+                                            Click="BtnSaveChannels_Click"
+                                            Padding="24,10"/>
+                                    <TextBlock x:Name="TxtChannelSaveStatus"
+                                               VerticalAlignment="Center" Margin="16,0,0,0"
+                                               FontSize="13"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
                 </Grid>
 
             </Grid>
