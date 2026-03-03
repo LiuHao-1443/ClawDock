@@ -316,37 +316,56 @@ public class OpenClawConfigService
         return failures;
     }
 
-    /// <summary>Save API key for a provider, merging with existing config if present</summary>
+    /// <summary>Save API key for a provider via auth-profiles.json + openclaw.json auth section</summary>
     public async Task<bool> SaveProviderApiKeyAsync(string providerName, string apiKey)
     {
         Log($"[SaveProviderApiKey] provider={providerName}, apiKey length={apiKey.Length}");
 
-        // Try to read existing provider config
-        var config = await ReadFullConfigAsync();
-        var existing = config.Providers.FirstOrDefault(p => p.Name == providerName);
+        var profileId = $"{providerName}:manual";
 
-        if (existing != null)
-        {
-            Log($"[SaveProviderApiKey] Found existing provider: baseUrl={existing.BaseUrl}, models={existing.Models.Count}");
-            existing.ApiKey = apiKey;
-            var failures = await SaveProviderAsync(existing);
-            Log($"[SaveProviderApiKey] SaveProvider result: failures={string.Join(",", failures)}");
-            return failures.Count == 0;
-        }
-        else
-        {
-            Log($"[SaveProviderApiKey] No existing provider found, creating new one");
-            var provider = new ProviderConfig
-            {
-                Name = providerName,
-                BaseUrl = "https://api.openai.com/v1",
-                ApiKey = apiKey,
-                Api = "openai"
-            };
-            var failures = await SaveProviderAsync(provider);
-            Log($"[SaveProviderApiKey] SaveProvider result: failures={string.Join(",", failures)}");
-            return failures.Count == 0;
-        }
+        // 通过 node 脚本写入 auth-profiles.json 和 openclaw.json auth 配置
+        // OpenClaw 使用独立的 auth store，而非 config 中的 apiKey 字段
+        var script = $$"""
+            const fs = require('fs');
+            const AGENT_DIR = '/root/.openclaw/agents/main/agent';
+            const CONFIG_PATH = '/root/.openclaw/openclaw.json';
+            const provider = '{{providerName}}';
+            const profileId = '{{profileId}}';
+            const token = '{{apiKey}}';
+
+            // 1. Update auth-profiles.json
+            fs.mkdirSync(AGENT_DIR, { recursive: true });
+            const authPath = AGENT_DIR + '/auth-profiles.json';
+            let store = { profiles: {} };
+            try { store = JSON.parse(fs.readFileSync(authPath, 'utf8')); if (!store.profiles) store.profiles = {}; } catch {}
+            store.profiles[profileId] = { type: 'token', provider, token };
+            fs.writeFileSync(authPath, JSON.stringify(store, null, 2));
+            fs.chmodSync(authPath, 0o600);
+
+            // 2. Update openclaw.json auth section
+            const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+            if (!cfg.auth) cfg.auth = {};
+            if (!cfg.auth.profiles) cfg.auth.profiles = {};
+            cfg.auth.profiles[profileId] = { provider, mode: 'token' };
+            if (!cfg.auth.order) cfg.auth.order = {};
+            if (!cfg.auth.order[provider]) cfg.auth.order[provider] = [];
+            if (!cfg.auth.order[provider].includes(profileId))
+                cfg.auth.order[provider].unshift(profileId);
+            fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+
+            console.log('OK');
+            """;
+
+        var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(script));
+        var wrapperCmd = $"echo {b64} | base64 -d | node -";
+
+        var ok = false;
+        var exitCode = await WslService.RunCommandStreamAsync("wsl",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"{wrapperCmd}\"",
+            line => { Log($"[SaveProviderApiKey] output: {line}"); if (line.Trim() == "OK") ok = true; });
+
+        Log($"[SaveProviderApiKey] exitCode={exitCode}, ok={ok}");
+        return exitCode == 0 && ok;
     }
 
     /// <summary>Save channel configuration</summary>

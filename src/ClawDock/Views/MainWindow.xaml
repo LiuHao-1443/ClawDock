@@ -238,14 +238,14 @@
                                 <Button x:Name="TabModels" Style="{StaticResource ToolbarButton}"
                                         Click="TabModels_Click"
                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                                        Padding="12,9" Margin="0,0,0,2"
-                                        Content="模型配置" FontSize="13"/>
+                                        Padding="14,12" Margin="0,0,0,4"
+                                        Content="模型配置" FontSize="15"/>
 
                                 <Button x:Name="TabChannels" Style="{StaticResource ToolbarButton}"
                                         Click="TabChannels_Click"
                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                                        Padding="12,9" Margin="0,0,0,2"
-                                        Content="渠道配置" FontSize="13"/>
+                                        Padding="14,12" Margin="0,0,0,4"
+                                        Content="渠道配置" FontSize="15"/>
                             </StackPanel>
                         </Grid>
                     </Border>

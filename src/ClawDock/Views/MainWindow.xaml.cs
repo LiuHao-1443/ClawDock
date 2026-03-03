@@ -848,7 +848,6 @@ public partial class MainWindow : Window
             var providerKeyValue = _providerKeyVisible
                 ? TxtSelectedProviderKey.Text?.Trim() ?? ""
                 : PwdSelectedProviderKey.Password ?? "";
-            failures.Add($"[DEBUG] provider={selectedProvider}, keyLen={providerKeyValue.Length}, _providerKeyVisible={_providerKeyVisible}");
             if (!string.IsNullOrEmpty(selectedProvider) && !string.IsNullOrEmpty(providerKeyValue))
             {
                 try
