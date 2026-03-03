@@ -405,6 +405,65 @@ public partial class MainWindow : Window
         _consoleLineCount = 0;
     }
 
+    // ── 飞书配对批准 ───────────────────────────────────────────────────────
+
+    private async void BtnFeishuPairingApprove_Click(object sender, RoutedEventArgs e)
+    {
+        var code = TxtFeishuPairingCode.Text?.Trim();
+        if (string.IsNullOrEmpty(code))
+        {
+            TxtFeishuPairingStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+            TxtFeishuPairingStatus.Text = "请输入配对码";
+            return;
+        }
+
+        BtnFeishuPairingApprove.IsEnabled = false;
+        TxtFeishuPairingStatus.Foreground = (SolidColorBrush)FindResource("TextSecondaryBrush");
+        TxtFeishuPairingStatus.Text = "正在批准...";
+
+        try
+        {
+            var output = "";
+            var exitCode = await WslService.RunCommandStreamAsync("wsl",
+                $"-d {WslService.DistroName} --user root -- bash -l -c \"openclaw pairing approve feishu {code}\"",
+                line => output += line + "\n");
+
+            Dispatcher.Invoke(() =>
+            {
+                if (exitCode == 0)
+                {
+                    TxtFeishuPairingStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
+                    TxtFeishuPairingStatus.Text = "配对成功";
+                    TxtFeishuPairingCode.Text = "";
+                }
+                else
+                {
+                    TxtFeishuPairingStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+                    TxtFeishuPairingStatus.Text = $"配对失败: {output.Trim()}";
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            TxtFeishuPairingStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+            TxtFeishuPairingStatus.Text = $"配对失败: {ex.Message}";
+        }
+        finally
+        {
+            BtnFeishuPairingApprove.IsEnabled = true;
+        }
+    }
+
+    // ── 飞书连接方式切换 ─────────────────────────────────────────────────────
+
+    private void CboFeishuConnectionMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PanelFeishuVerifyToken == null) return;
+        var mode = (CboFeishuConnectionMode.SelectedItem as ComboBoxItem)?.Content?.ToString();
+        PanelFeishuVerifyToken.Visibility = mode == "webhook"
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     // ── 设置页 ──────────────────────────────────────────────────────────────
 
     private bool _settingsLoaded;
@@ -629,33 +688,20 @@ public partial class MainWindow : Window
                 {
                     switch (ch.Name)
                     {
-                        case "telegram":
-                            ChkTelegramEnabled.IsChecked = ch.Enabled;
-                            if (ch.Properties.TryGetValue("botToken", out var tgToken))
-                                PwdTelegramToken.Password = tgToken;
-                            if (ch.Properties.TryGetValue("dmPolicy", out var tgDm))
-                                SelectComboItem(CboTelegramDmPolicy, tgDm);
-                            if (ch.Properties.TryGetValue("streaming", out var tgStream))
-                                ChkTelegramStreaming.IsChecked = tgStream == "true";
-                            break;
-                        case "discord":
-                            ChkDiscordEnabled.IsChecked = ch.Enabled;
-                            if (ch.Properties.TryGetValue("token", out var dcToken))
-                                PwdDiscordToken.Password = dcToken;
-                            if (ch.Properties.TryGetValue("mediaMaxMb", out var dcMedia))
-                                TxtDiscordMediaMaxMb.Text = dcMedia;
-                            break;
-                        case "slack":
-                            ChkSlackEnabled.IsChecked = ch.Enabled;
-                            if (ch.Properties.TryGetValue("botToken", out var slBot))
-                                PwdSlackBotToken.Password = slBot;
-                            if (ch.Properties.TryGetValue("appToken", out var slApp))
-                                PwdSlackAppToken.Password = slApp;
-                            break;
-                        case "whatsapp":
-                            ChkWhatsAppEnabled.IsChecked = ch.Enabled;
-                            if (ch.Properties.TryGetValue("dmPolicy", out var waDm))
-                                SelectComboItem(CboWhatsAppDmPolicy, waDm);
+                        case "feishu":
+                            ChkFeishuEnabled.IsChecked = ch.Enabled;
+                            if (ch.Properties.TryGetValue("appId", out var fsAppId))
+                                TxtFeishuAppId.Text = fsAppId;
+                            if (ch.Properties.TryGetValue("appSecret", out var fsAppSecret))
+                                PwdFeishuAppSecret.Password = fsAppSecret;
+                            if (ch.Properties.TryGetValue("connectionMode", out var fsMode))
+                                SelectComboItem(CboFeishuConnectionMode, fsMode);
+                            if (ch.Properties.TryGetValue("verifyToken", out var fsVerify))
+                                PwdFeishuVerifyToken.Password = fsVerify;
+                            // Show verify token panel if webhook mode
+                            var mode = (CboFeishuConnectionMode.SelectedItem as ComboBoxItem)?.Content?.ToString();
+                            PanelFeishuVerifyToken.Visibility = mode == "webhook"
+                                ? Visibility.Visible : Visibility.Collapsed;
                             break;
                     }
                 }
@@ -935,34 +981,17 @@ public partial class MainWindow : Window
         {
             var allFailures = new List<string>();
 
-            // Telegram
-            var telegram = new ChannelConfig { Name = "telegram", Enabled = ChkTelegramEnabled.IsChecked == true };
-            if (!string.IsNullOrEmpty(PwdTelegramToken.Password))
-                telegram.Properties["botToken"] = PwdTelegramToken.Password;
-            telegram.Properties["dmPolicy"] = (CboTelegramDmPolicy.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "allow";
-            telegram.Properties["streaming"] = ChkTelegramStreaming.IsChecked == true ? "true" : "false";
-            allFailures.AddRange(await _configService.SaveChannelAsync(telegram));
-
-            // Discord
-            var discord = new ChannelConfig { Name = "discord", Enabled = ChkDiscordEnabled.IsChecked == true };
-            if (!string.IsNullOrEmpty(PwdDiscordToken.Password))
-                discord.Properties["token"] = PwdDiscordToken.Password;
-            if (!string.IsNullOrEmpty(TxtDiscordMediaMaxMb.Text))
-                discord.Properties["mediaMaxMb"] = TxtDiscordMediaMaxMb.Text.Trim();
-            allFailures.AddRange(await _configService.SaveChannelAsync(discord));
-
-            // Slack
-            var slack = new ChannelConfig { Name = "slack", Enabled = ChkSlackEnabled.IsChecked == true };
-            if (!string.IsNullOrEmpty(PwdSlackBotToken.Password))
-                slack.Properties["botToken"] = PwdSlackBotToken.Password;
-            if (!string.IsNullOrEmpty(PwdSlackAppToken.Password))
-                slack.Properties["appToken"] = PwdSlackAppToken.Password;
-            allFailures.AddRange(await _configService.SaveChannelAsync(slack));
-
-            // WhatsApp
-            var whatsapp = new ChannelConfig { Name = "whatsapp", Enabled = ChkWhatsAppEnabled.IsChecked == true };
-            whatsapp.Properties["dmPolicy"] = (CboWhatsAppDmPolicy.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "allow";
-            allFailures.AddRange(await _configService.SaveChannelAsync(whatsapp));
+            // Feishu
+            var feishu = new ChannelConfig { Name = "feishu", Enabled = ChkFeishuEnabled.IsChecked == true };
+            if (!string.IsNullOrEmpty(TxtFeishuAppId.Text))
+                feishu.Properties["appId"] = TxtFeishuAppId.Text.Trim();
+            if (!string.IsNullOrEmpty(PwdFeishuAppSecret.Password))
+                feishu.Properties["appSecret"] = PwdFeishuAppSecret.Password;
+            var connMode = (CboFeishuConnectionMode.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "websocket";
+            feishu.Properties["connectionMode"] = connMode;
+            if (connMode == "webhook" && !string.IsNullOrEmpty(PwdFeishuVerifyToken.Password))
+                feishu.Properties["verifyToken"] = PwdFeishuVerifyToken.Password;
+            allFailures.AddRange(await _configService.SaveChannelAsync(feishu));
 
             if (allFailures.Count == 0)
             {

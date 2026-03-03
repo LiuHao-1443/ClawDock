@@ -174,7 +174,7 @@ public class OpenClawConfigService
     {
         var channels = new List<ChannelConfig>();
         var root = doc.RootElement;
-        string[] knownChannels = ["telegram", "discord", "slack", "whatsapp"];
+        string[] knownChannels = ["feishu"];
 
         try
         {

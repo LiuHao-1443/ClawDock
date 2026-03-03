@@ -393,97 +393,105 @@
                             <StackPanel MaxWidth="600">
                                 <TextBlock Text="渠道配置" FontSize="20" FontWeight="Bold"
                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
-                                <TextBlock Text="配置消息渠道（Telegram、Discord、Slack、WhatsApp）"
+                                <TextBlock Text="配置消息渠道（飞书）"
                                            Style="{StaticResource FieldHint}" Margin="0,0,0,24"/>
 
-                                <!-- Telegram -->
+                                <!-- 飞书 (Feishu) -->
                                 <Border Background="{StaticResource SurfaceBrush}"
                                         BorderBrush="{StaticResource BorderBrush}"
                                         BorderThickness="1" CornerRadius="8" Padding="20,16"
                                         Margin="0,0,0,12">
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                            <TextBlock Text="Telegram" FontSize="16" FontWeight="SemiBold"
+                                            <TextBlock Text="飞书" FontSize="16" FontWeight="SemiBold"
                                                        Foreground="{StaticResource TextPrimaryBrush}"
                                                        VerticalAlignment="Center" Margin="0,0,16,0"/>
-                                            <CheckBox x:Name="ChkTelegramEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                            <CheckBox x:Name="ChkFeishuEnabled" Style="{StaticResource ToggleSwitch}"/>
                                         </StackPanel>
-                                        <TextBlock Text="Bot Token" Style="{StaticResource FieldLabel}"/>
-                                        <PasswordBox x:Name="PwdTelegramToken" Style="{StaticResource DarkPasswordBox}"
+                                        <TextBlock Text="App ID" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox x:Name="TxtFeishuAppId" Style="{StaticResource DarkTextBox}"
+                                                 Margin="0,0,0,12"/>
+                                        <TextBlock Text="App Secret" Style="{StaticResource FieldLabel}"/>
+                                        <PasswordBox x:Name="PwdFeishuAppSecret" Style="{StaticResource DarkPasswordBox}"
                                                      Margin="0,0,0,12"/>
-                                        <TextBlock Text="DM Policy" Style="{StaticResource FieldLabel}"/>
-                                        <ComboBox x:Name="CboTelegramDmPolicy" Style="{StaticResource DarkComboBox}"
-                                                  IsEditable="False" Margin="0,0,0,12">
-                                            <ComboBoxItem Content="allow" Style="{StaticResource DarkComboBoxItem}" IsSelected="True"/>
-                                            <ComboBoxItem Content="deny" Style="{StaticResource DarkComboBoxItem}"/>
+                                        <TextBlock Text="连接方式" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox x:Name="CboFeishuConnectionMode" Style="{StaticResource DarkComboBoxReadOnly}"
+                                                  ItemContainerStyle="{StaticResource DarkComboBoxItem}"
+                                                  SelectionChanged="CboFeishuConnectionMode_SelectionChanged"
+                                                  Margin="0,0,0,12">
+                                            <ComboBoxItem Content="websocket" IsSelected="True"/>
+                                            <ComboBoxItem Content="webhook"/>
                                         </ComboBox>
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="Streaming" Style="{StaticResource FieldLabel}"
-                                                       VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                            <CheckBox x:Name="ChkTelegramStreaming" Style="{StaticResource ToggleSwitch}"/>
+                                        <StackPanel x:Name="PanelFeishuVerifyToken" Visibility="Collapsed">
+                                            <TextBlock Text="Verify Token" Style="{StaticResource FieldLabel}"/>
+                                            <PasswordBox x:Name="PwdFeishuVerifyToken" Style="{StaticResource DarkPasswordBox}"/>
+                                            <TextBlock Text="Webhook 模式需要配置验证 Token"
+                                                       Style="{StaticResource FieldHint}" Margin="0,4,0,0"/>
                                         </StackPanel>
+
+                                        <!-- 配对批准 -->
+                                        <Border BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="0,1,0,0" Margin="0,16,0,0" Padding="0,16,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="用户配对" FontSize="14" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                                                <TextBlock Text="用户首次与机器人对话时会收到配对码，在此输入以批准访问"
+                                                           Style="{StaticResource FieldHint}" Margin="0,0,0,10"/>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox x:Name="TxtFeishuPairingCode" Style="{StaticResource DarkTextBox}"
+                                                             VerticalContentAlignment="Center"/>
+                                                    <Button x:Name="BtnFeishuPairingApprove" Grid.Column="1"
+                                                            Content="批准" Style="{StaticResource PrimaryButton}"
+                                                            Click="BtnFeishuPairingApprove_Click"
+                                                            Padding="20,8" Margin="8,0,0,0"/>
+                                                </Grid>
+                                                <TextBlock x:Name="TxtFeishuPairingStatus"
+                                                           FontSize="12" Margin="0,6,0,0"/>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Discord -->
-                                <Border Background="{StaticResource SurfaceBrush}"
-                                        BorderBrush="{StaticResource BorderBrush}"
-                                        BorderThickness="1" CornerRadius="8" Padding="20,16"
-                                        Margin="0,0,0,12">
+                                <!-- Telegram (hidden) -->
+                                <Border Visibility="Collapsed">
                                     <StackPanel>
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                            <TextBlock Text="Discord" FontSize="16" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
-                                            <CheckBox x:Name="ChkDiscordEnabled" Style="{StaticResource ToggleSwitch}"/>
-                                        </StackPanel>
-                                        <TextBlock Text="Bot Token" Style="{StaticResource FieldLabel}"/>
-                                        <PasswordBox x:Name="PwdDiscordToken" Style="{StaticResource DarkPasswordBox}"
-                                                     Margin="0,0,0,12"/>
-                                        <TextBlock Text="Media Max MB" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox x:Name="TxtDiscordMediaMaxMb" Style="{StaticResource DarkTextBox}"
-                                                 Margin="0,0,0,4"/>
-                                        <TextBlock Text="最大媒体文件大小（MB）" Style="{StaticResource FieldHint}"/>
+                                        <CheckBox x:Name="ChkTelegramEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                        <PasswordBox x:Name="PwdTelegramToken" Style="{StaticResource DarkPasswordBox}"/>
+                                        <ComboBox x:Name="CboTelegramDmPolicy">
+                                            <ComboBoxItem Content="allow" IsSelected="True"/>
+                                        </ComboBox>
+                                        <CheckBox x:Name="ChkTelegramStreaming" Style="{StaticResource ToggleSwitch}"/>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Slack -->
-                                <Border Background="{StaticResource SurfaceBrush}"
-                                        BorderBrush="{StaticResource BorderBrush}"
-                                        BorderThickness="1" CornerRadius="8" Padding="20,16"
-                                        Margin="0,0,0,12">
+                                <!-- Discord (hidden) -->
+                                <Border Visibility="Collapsed">
                                     <StackPanel>
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                            <TextBlock Text="Slack" FontSize="16" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
-                                            <CheckBox x:Name="ChkSlackEnabled" Style="{StaticResource ToggleSwitch}"/>
-                                        </StackPanel>
-                                        <TextBlock Text="Bot Token" Style="{StaticResource FieldLabel}"/>
-                                        <PasswordBox x:Name="PwdSlackBotToken" Style="{StaticResource DarkPasswordBox}"
-                                                     Margin="0,0,0,12"/>
-                                        <TextBlock Text="App Token" Style="{StaticResource FieldLabel}"/>
+                                        <CheckBox x:Name="ChkDiscordEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                        <PasswordBox x:Name="PwdDiscordToken" Style="{StaticResource DarkPasswordBox}"/>
+                                        <TextBox x:Name="TxtDiscordMediaMaxMb" Style="{StaticResource DarkTextBox}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Slack (hidden) -->
+                                <Border Visibility="Collapsed">
+                                    <StackPanel>
+                                        <CheckBox x:Name="ChkSlackEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                        <PasswordBox x:Name="PwdSlackBotToken" Style="{StaticResource DarkPasswordBox}"/>
                                         <PasswordBox x:Name="PwdSlackAppToken" Style="{StaticResource DarkPasswordBox}"/>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- WhatsApp -->
-                                <Border Background="{StaticResource SurfaceBrush}"
-                                        BorderBrush="{StaticResource BorderBrush}"
-                                        BorderThickness="1" CornerRadius="8" Padding="20,16"
-                                        Margin="0,0,0,12">
+                                <!-- WhatsApp (hidden) -->
+                                <Border Visibility="Collapsed">
                                     <StackPanel>
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                            <TextBlock Text="WhatsApp" FontSize="16" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
-                                            <CheckBox x:Name="ChkWhatsAppEnabled" Style="{StaticResource ToggleSwitch}"/>
-                                        </StackPanel>
-                                        <TextBlock Text="DM Policy" Style="{StaticResource FieldLabel}"/>
-                                        <ComboBox x:Name="CboWhatsAppDmPolicy" Style="{StaticResource DarkComboBox}"
-                                                  IsEditable="False">
-                                            <ComboBoxItem Content="allow" Style="{StaticResource DarkComboBoxItem}" IsSelected="True"/>
-                                            <ComboBoxItem Content="deny" Style="{StaticResource DarkComboBoxItem}"/>
+                                        <CheckBox x:Name="ChkWhatsAppEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                        <ComboBox x:Name="CboWhatsAppDmPolicy">
+                                            <ComboBoxItem Content="allow" IsSelected="True"/>
                                         </ComboBox>
                                     </StackPanel>
                                 </Border>
