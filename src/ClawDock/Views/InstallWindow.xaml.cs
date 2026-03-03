@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using ClawDock.Services;
@@ -11,9 +12,17 @@ public partial class InstallWindow : Window
     private readonly OpenClawService _openClawService = new();
     private readonly CancellationTokenSource _cts = new();
 
+    private static readonly string LogDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "ClawDock", "logs");
+
+    private StreamWriter? _installLog;
+    private string? _logFilePath;
+
     private int _currentStep = 1;
     private bool _wslAlreadyInstalled;
     private bool _needsReboot;
+    private bool _openingMainWindow;
 
     public InstallWindow(InstallStateService stateService)
     {
@@ -127,9 +136,9 @@ public partial class InstallWindow : Window
                 break;
 
             case 3:
-                // WSL2 安装后需要重启
                 if (_needsReboot)
                 {
+                    // WSL2 安装后需要重启
                     var result = MessageBox.Show(
                         "WSL2 安装完成，需要重启计算机才能继续。\n\n重启后请重新打开 ClawDock，安装将自动继续。\n\n是否立即重启？",
                         "重启计算机", MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -139,6 +148,16 @@ public partial class InstallWindow : Window
                         Application.Current.Shutdown();
                     }
                 }
+                else
+                {
+                    // 重试 WSL2 安装
+                    _ = RunWsl2InstallAsync();
+                }
+                break;
+
+            case 4:
+                // 重试 OpenClaw 安装
+                _ = RunOpenClawInstallAsync();
                 break;
 
             case 5:
@@ -147,13 +166,41 @@ public partial class InstallWindow : Window
         }
     }
 
+    // ── 安装日志 ─────────────────────────────────────────────────────────
+
+    private void InitInstallLog()
+    {
+        if (_installLog != null) return;
+
+        Directory.CreateDirectory(LogDir);
+        _logFilePath = Path.Combine(LogDir, $"install-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+        _installLog = new StreamWriter(_logFilePath, append: false) { AutoFlush = true };
+
+        _installLog.WriteLine($"ClawDock Install Log");
+        _installLog.WriteLine($"Time : {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        _installLog.WriteLine($"OS   : {Environment.OSVersion}");
+        _installLog.WriteLine(new string('─', 60));
+    }
+
+    private void WriteLog(string line)
+    {
+        _installLog?.WriteLine($"[{DateTime.Now:HH:mm:ss}] {line}");
+    }
+
     // ── 系统检测 ─────────────────────────────────────────────────────────
 
     private async Task RunSystemCheckAsync()
     {
+        InitInstallLog();
         BtnNext.IsEnabled = false;
 
+        WriteLog("── 系统检测 ──");
         var result = await Task.Run(() => _wslService.Check());
+
+        WriteLog($"Windows Build: {result.WindowsBuild} (ok={result.WindowsVersionOk})");
+        WriteLog($"Virtualization: {result.VirtualizationEnabled}");
+        WriteLog($"WSL2 Installed: {result.Wsl2Installed}");
+        WriteLog($"Distro Installed: {result.DistroInstalled}");
 
         CheckWinVersionText.Text = $"当前版本: Build {result.WindowsBuild} (需要 Build 19041+)";
         SetStatus(CheckWinVersionStatus, result.WindowsVersionOk ? StatusKind.Ok : StatusKind.Error);
@@ -188,13 +235,16 @@ public partial class InstallWindow : Window
 
     private async Task RunWsl2InstallAsync()
     {
+        InitInstallLog();
         BtnNext.IsEnabled = false;
         WslLogText.Text = "";
 
+        WriteLog("── WSL2 安装 ──");
         var progress = new Progress<string>(line =>
         {
             WslLogText.Text += line + "\n";
             WslLogScroll.ScrollToBottom();
+            WriteLog(line);
         });
 
         try
@@ -207,6 +257,7 @@ public partial class InstallWindow : Window
 
             if (_needsReboot)
             {
+                WriteLog("WSL2 安装完成，需要重启");
                 WslRebootBanner.Visibility = Visibility.Visible;
                 _stateService.MarkWsl2Done();
                 SetResumeOnReboot();
@@ -215,6 +266,7 @@ public partial class InstallWindow : Window
             }
             else
             {
+                WriteLog("WSL2 安装完成，无需重启");
                 _stateService.MarkWsl2Done();
                 BtnNext.IsEnabled = true;
                 NavigateTo(4);
@@ -223,7 +275,9 @@ public partial class InstallWindow : Window
         }
         catch (Exception ex)
         {
+            WriteLog($"❌ WSL2 安装异常: {ex}");
             ((IProgress<string>)progress).Report($"\n❌ 错误: {ex.Message}");
+            ((IProgress<string>)progress).Report($"详细日志: {_logFilePath}");
             BtnNext.IsEnabled = true;
             BtnNext.Content = "重试";
         }
@@ -233,13 +287,16 @@ public partial class InstallWindow : Window
 
     private async Task RunOpenClawInstallAsync()
     {
+        InitInstallLog();
         BtnNext.IsEnabled = false;
         InstallLogText.Text = "";
 
+        WriteLog("── OpenClaw 安装 ──");
         var progress = new Progress<string>(line =>
         {
             InstallLogText.Text += line + "\n";
             InstallLogScroll.ScrollToBottom();
+            WriteLog(line);
         });
 
         try
@@ -248,6 +305,7 @@ public partial class InstallWindow : Window
                 line => ((IProgress<string>)progress).Report(line),
                 _cts.Token));
 
+            WriteLog("OpenClaw 安装完成");
             _stateService.MarkOpenClawDone();
             ClearResumeOnReboot();
 
@@ -255,7 +313,9 @@ public partial class InstallWindow : Window
         }
         catch (Exception ex)
         {
+            WriteLog($"❌ OpenClaw 安装异常: {ex}");
             ((IProgress<string>)progress).Report($"\n❌ 错误: {ex.Message}");
+            ((IProgress<string>)progress).Report($"详细日志: {_logFilePath}");
             BtnNext.IsEnabled = true;
             BtnNext.Content = "重试";
         }
@@ -311,6 +371,7 @@ public partial class InstallWindow : Window
 
     private void OpenMainWindow()
     {
+        _openingMainWindow = true;
         new MainWindow().Show();
         Close();
     }
@@ -318,7 +379,9 @@ public partial class InstallWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _cts.Cancel();
+        _installLog?.Dispose();
         base.OnClosed(e);
-        Application.Current.Shutdown();
+        if (!_openingMainWindow)
+            Application.Current.Shutdown();
     }
 }
