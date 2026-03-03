@@ -123,6 +123,9 @@
                 <!-- 状态指示器 -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal"
                             VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock x:Name="VersionText" Text=""
+                               FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <Ellipse x:Name="StatusDot" Width="8" Height="8"
                              Fill="#555577" Margin="0,0,6,0"/>
                     <TextBlock x:Name="StatusText" Text="未运行"

@@ -200,6 +200,7 @@ public partial class MainWindow : Window
         {
             _statusTimer.Start();
             ApplyStatus(GatewayStatus.Running);
+            _ = LoadOpenClawVersionAsync();
             return;
         }
 
@@ -233,6 +234,7 @@ public partial class MainWindow : Window
             if (ready)
             {
                 ApplyStatus(GatewayStatus.Stopped);
+                _ = LoadOpenClawVersionAsync();
             }
             else
             {
@@ -244,6 +246,24 @@ public partial class MainWindow : Window
                 ShowNotRunning();
             }
         });
+    }
+
+    private async Task LoadOpenClawVersionAsync()
+    {
+        try
+        {
+            var version = "";
+            await Task.Run(async () =>
+            {
+                await WslService.RunCommandStreamAsync("wsl",
+                    $"-d {WslService.DistroName} --user root -- openclaw --version",
+                    line => version = line.Trim());
+            });
+
+            if (!string.IsNullOrEmpty(version))
+                Dispatcher.Invoke(() => VersionText.Text = $"OpenClaw v{version}");
+        }
+        catch { }
     }
 
     private void ShowInitializing()

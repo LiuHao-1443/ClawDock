@@ -7,8 +7,11 @@ namespace ClawDock.Services;
 public enum InstallPhase
 {
     NotStarted,
-    Wsl2,       // WSL2 已安装，等待重启后继续
-    OpenClaw,   // 正在安装 ClawDock
+    Wsl2Enabled,        // WSL2 功能已启用
+    Wsl2Reboot,         // WSL2 需要重启激活（仅此阶段自动续装）
+    DistroImported,     // 发行版已导入
+    DistroConfigured,   // 发行版已配置（apt 镜像 + wsl.conf）
+    OpenClawInstalling, // 正在安装 OpenClaw
     Complete
 }
 
@@ -72,12 +75,19 @@ public class InstallStateService
         File.WriteAllText(StatePath, json);
     }
 
+    public void SavePhase(InstallPhase phase)
+    {
+        var state = Load();
+        state.Phase = phase;
+        Save(state);
+    }
+
     public void MarkWsl2Done()
     {
         var state = Load();
         state.Wsl2Installed = true;
         state.DistroInstalled = true;
-        state.Phase = InstallPhase.Wsl2;
+        state.Phase = InstallPhase.DistroConfigured;
         Save(state);
     }
 
@@ -89,5 +99,11 @@ public class InstallStateService
         state.IsInstallComplete = true;
         state.InstallDate = DateTime.UtcNow;
         Save(state);
+    }
+
+    public void Reset()
+    {
+        if (File.Exists(StatePath))
+            File.Delete(StatePath);
     }
 }

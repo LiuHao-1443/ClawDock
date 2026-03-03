@@ -18,8 +18,10 @@ public class OpenClawService
     /// <summary>
     /// 在 WSL2 Ubuntu 内安装 Node.js 22 + OpenClaw
     /// </summary>
-    public async Task InstallAsync(Action<string> onLog, CancellationToken ct = default)
+    public async Task InstallAsync(Action<string> onLog, Action<InstallPhase>? onPhase = null, CancellationToken ct = default)
     {
+        onPhase?.Invoke(InstallPhase.OpenClawInstalling);
+
         // LANG=C 强制 apt 输出英文，避免中文编码问题；DEBIAN_FRONTEND 禁止交互提示
         const string Env = "LANG=C DEBIAN_FRONTEND=noninteractive";
 
