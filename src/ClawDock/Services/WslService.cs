@@ -115,7 +115,7 @@ public class WslService
     /// 安装 WSL2 + Ubuntu（使用内嵌 rootfs，无需联网下载）
     /// 返回 true = 安装完成；false = 需要重启
     /// </summary>
-    public async Task<bool> InstallAsync(Action<string> onLog, CancellationToken ct = default)
+    public async Task<bool> InstallAsync(Action<string> onLog, Action<InstallPhase>? onPhase = null, CancellationToken ct = default)
     {
         onLog("正在检查系统状态...");
 
@@ -131,6 +131,8 @@ public class WslService
 
         await RunCommandStreamAsync("wsl", "--install --no-distribution",
             line => onLog("  " + line), ct, Encoding.Unicode);
+
+        onPhase?.Invoke(InstallPhase.Wsl2Enabled);
 
         // Step 2: 从内嵌资源导入 Ubuntu rootfs 为 ClawDock 发行版
         if (!IsDistroInstalled())
@@ -180,6 +182,7 @@ public class WslService
             }
 
             onLog("  ✓ 导入完成");
+            onPhase?.Invoke(InstallPhase.DistroImported);
         }
         else
         {
@@ -236,6 +239,7 @@ public class WslService
                 "重启发行版后无法连接（已等待 30 秒），请确认 WSL2 已正确安装，" +
                 "并尝试手动运行: wsl -d ClawDock --user root -- echo ok");
         onLog("  ✓ 发行版重启完成");
+        onPhase?.Invoke(InstallPhase.DistroConfigured);
 
         onLog("");
         onLog("✓ WSL2 + ClawDock 环境安装完成");
@@ -385,6 +389,13 @@ public class WslService
     internal static bool IsGarbledWslMessage(string line)
     {
         if (line.Length < 4) return false;
+
+        // WSL 的 localhost 代理提示（UTF-16LE 被当 UTF-8 读取后产生的特征模式）：
+        // 原始消息类似 "…localhost 代理…"，清洗后变成 "N/ec localhost ♠Nt0" 等
+        if (line.Contains("localhost") && line.Length < 40
+            && !line.Contains("http") && !line.Contains("://"))
+            return true;
+
         // 统计非 ASCII 且非 CJK 的字符数量
         // UTF-16LE 被当 UTF-8 读取后会产生 ◆(U+25C6)、替换字符(U+FFFD) 等
         // 阈值设为 3：少量 unicode 符号（emoji、箭头等）是合法日志内容，

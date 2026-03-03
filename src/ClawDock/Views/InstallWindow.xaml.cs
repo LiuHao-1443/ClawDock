@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -29,10 +30,9 @@ public partial class InstallWindow : Window
         InitializeComponent();
         _stateService = stateService;
 
-        // 如果上次安装到一半（WSL2 已启用但需要重启），重启后继续：
-        // 先回到 Step 3 完成 Ubuntu 导入，再自动进入 Step 4 安装 OpenClaw
+        // WSL2 重启后自动续装（唯一允许续装的场景）
         var state = stateService.Load();
-        if (state.Phase == InstallPhase.Wsl2)
+        if (state.Phase == InstallPhase.Wsl2Reboot)
         {
             NavigateTo(3);
             _ = RunWsl2InstallAsync();
@@ -251,6 +251,7 @@ public partial class InstallWindow : Window
         {
             bool ok = await Task.Run(() => _wslService.InstallAsync(
                 line => ((IProgress<string>)progress).Report(line),
+                phase => _stateService.SavePhase(phase),
                 _cts.Token));
 
             _needsReboot = !ok;
@@ -259,7 +260,7 @@ public partial class InstallWindow : Window
             {
                 WriteLog("WSL2 安装完成，需要重启");
                 WslRebootBanner.Visibility = Visibility.Visible;
-                _stateService.MarkWsl2Done();
+                _stateService.SavePhase(InstallPhase.Wsl2Reboot);
                 SetResumeOnReboot();
                 BtnNext.IsEnabled = true;
                 BtnNext.Content = "立即重启";
@@ -303,11 +304,13 @@ public partial class InstallWindow : Window
         {
             await Task.Run(() => _openClawService.InstallAsync(
                 line => ((IProgress<string>)progress).Report(line),
+                phase => _stateService.SavePhase(phase),
                 _cts.Token));
 
             WriteLog("OpenClaw 安装完成");
             _stateService.MarkOpenClawDone();
             ClearResumeOnReboot();
+            CreateDesktopShortcut();
 
             NavigateTo(5);
         }
@@ -338,6 +341,42 @@ public partial class InstallWindow : Window
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
             @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
         key?.DeleteValue("ClawDockResume", throwOnMissingValue: false);
+    }
+
+    // ── 桌面快捷方式 ──────────────────────────────────────────────────────
+
+    private void CreateDesktopShortcut()
+    {
+        try
+        {
+            var exePath = Process.GetCurrentProcess().MainModule?.FileName;
+            if (exePath == null) return;
+
+            var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            var lnkPath = Path.Combine(desktopPath, "ClawDock.lnk");
+
+            if (File.Exists(lnkPath)) return;
+
+            var ps = $"$s=(New-Object -COM WScript.Shell).CreateShortcut('{lnkPath}');" +
+                     $"$s.TargetPath='{exePath}';" +
+                     $"$s.IconLocation='{exePath}';" +
+                     "$s.Save()";
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell",
+                Arguments = $"-NoProfile -Command \"{ps}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            Process.Start(psi)?.WaitForExit(5000);
+
+            WriteLog("桌面快捷方式已创建");
+        }
+        catch (Exception ex)
+        {
+            WriteLog($"创建桌面快捷方式失败: {ex.Message}");
+        }
     }
 
     // ── 状态图标辅助 ──────────────────────────────────────────────────────
