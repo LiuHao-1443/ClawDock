@@ -1127,7 +1127,6 @@ public partial class MainWindow : Window
             }
             else
             {
-                OpenClawConfigService.LogExt($"Save failures: {string.Join(", ", failures)}");
                 TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
                 TxtModelSaveStatus.Text = $"部分保存失败: {string.Join(", ", failures)}";
             }

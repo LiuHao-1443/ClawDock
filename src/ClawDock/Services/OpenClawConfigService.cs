@@ -237,27 +237,15 @@ public class OpenClawConfigService
     }
 
     /// <summary>Set a single config key via openclaw config set (base64 pipe to avoid escaping)</summary>
-    private static readonly string LogPath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "clawdock_debug.log");
-    public static void LogExt(string msg) => Log(msg);
-    private static void Log(string msg)
-    {
-        try { System.IO.File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss} {msg}\n"); } catch { }
-    }
-
     public async Task<bool> SetConfigAsync(string key, string value)
     {
         var script = $"openclaw config set {key} '{value.Replace("'", "'\"'\"'")}'";
         var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(script));
         var wrapperCmd = $"echo {b64} | base64 -d | bash -l";
 
-        Log($"[SetConfig] key={key}");
-        Log($"[SetConfig] script={script}");
-
         var exitCode = await WslService.RunCommandStreamAsync("wsl",
             $"-d {WslService.DistroName} --user root -- bash -c \"{wrapperCmd}\"",
-            line => Log($"[SetConfig] output: {line}"));
-        Log($"[SetConfig] exitCode={exitCode}");
+            _ => { });
         return exitCode == 0;
     }
 
@@ -319,8 +307,6 @@ public class OpenClawConfigService
     /// <summary>Save API key for a provider via auth-profiles.json + openclaw.json auth section</summary>
     public async Task<bool> SaveProviderApiKeyAsync(string providerName, string apiKey)
     {
-        Log($"[SaveProviderApiKey] provider={providerName}, apiKey length={apiKey.Length}");
-
         var profileId = $"{providerName}:manual";
 
         // 通过 node 脚本写入 auth-profiles.json 和 openclaw.json auth 配置
@@ -362,9 +348,7 @@ public class OpenClawConfigService
         var ok = false;
         var exitCode = await WslService.RunCommandStreamAsync("wsl",
             $"-d {WslService.DistroName} --user root -- bash -l -c \"{wrapperCmd}\"",
-            line => { Log($"[SaveProviderApiKey] output: {line}"); if (line.Trim() == "OK") ok = true; });
-
-        Log($"[SaveProviderApiKey] exitCode={exitCode}, ok={ok}");
+            line => { if (line.Trim() == "OK") ok = true; });
         return exitCode == 0 && ok;
     }
 
