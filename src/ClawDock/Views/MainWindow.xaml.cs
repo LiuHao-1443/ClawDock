@@ -144,21 +144,11 @@ public partial class MainWindow : Window
         PageInitializing.Visibility = Visibility.Collapsed;
         PageSettings.Visibility    = Visibility.Collapsed;
 
-        var url = _gateway.DashboardUrl;
-
-        // token 已就绪 → 直接导航
-        if (url.Contains("token="))
-        {
-            NavigateIfNeeded(url);
-            return;
-        }
-
-        // token 未就绪 → 后台读取，读完再导航（避免阻塞 UI 线程）
+        // 后台读取最新 token，导航，并同步到钉钉配置
         _ = Task.Run(async () =>
         {
             _gateway.ReadAuthToken();
             Dispatcher.Invoke(() => NavigateIfNeeded(_gateway.DashboardUrl));
-            // 每次 Gateway 启动后同步 token 到钉钉渠道配置
             await _configService.SyncGatewayTokenToDingtalkAsync();
         });
     }
@@ -1195,8 +1185,6 @@ public partial class MainWindow : Window
                     TxtChannelSaveStatus.Text = "保存成功";
                 }
 
-                // Gateway 重启后 token 会变，同步到钉钉渠道配置
-                await _configService.SyncGatewayTokenToDingtalkAsync();
             }
             else
             {
