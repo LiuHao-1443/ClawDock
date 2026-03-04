@@ -202,6 +202,7 @@ public partial class MainWindow : Window
             ApplyStatus(GatewayStatus.Running);
             _ = LoadOpenClawVersionAsync();
             _ = LoadModelNameAsync();
+            _ = EnsureDingtalkPluginInstalledAsync();
             return;
         }
 
@@ -237,6 +238,7 @@ public partial class MainWindow : Window
                 ApplyStatus(GatewayStatus.Stopped);
                 _ = LoadOpenClawVersionAsync();
                 _ = LoadModelNameAsync();
+                _ = EnsureDingtalkPluginInstalledAsync();
             }
             else
             {
@@ -478,6 +480,159 @@ public partial class MainWindow : Window
         var mode = (CboFeishuConnectionMode.SelectedItem as ComboBoxItem)?.Content?.ToString();
         PanelFeishuVerifyToken.Visibility = mode == "webhook"
             ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ── 钉钉事件处理 ─────────────────────────────────────────────────────────
+
+    private void CboDingtalkMessageType_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PanelDingtalkCard == null) return;
+        var msgType = (CboDingtalkMessageType.SelectedItem as ComboBoxItem)?.Content?.ToString();
+        PanelDingtalkCard.Visibility = msgType == "card"
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private bool _dingtalkAdvancedExpanded;
+
+    private void BtnDingtalkAdvancedToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _dingtalkAdvancedExpanded = !_dingtalkAdvancedExpanded;
+        PanelDingtalkAdvanced.Visibility = _dingtalkAdvancedExpanded
+            ? Visibility.Visible : Visibility.Collapsed;
+        BtnDingtalkAdvancedToggle.Content = _dingtalkAdvancedExpanded
+            ? "▼ 高级设置" : "▶ 高级设置";
+    }
+
+    private async void BtnDingtalkPairingApprove_Click(object sender, RoutedEventArgs e)
+    {
+        var code = TxtDingtalkPairingCode.Text?.Trim();
+        if (string.IsNullOrEmpty(code))
+        {
+            TxtDingtalkPairingStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+            TxtDingtalkPairingStatus.Text = "请输入配对码";
+            return;
+        }
+
+        BtnDingtalkPairingApprove.IsEnabled = false;
+        TxtDingtalkPairingStatus.Foreground = (SolidColorBrush)FindResource("TextSecondaryBrush");
+        TxtDingtalkPairingStatus.Text = "正在批准...";
+
+        try
+        {
+            var output = "";
+            var exitCode = await WslService.RunCommandStreamAsync("wsl",
+                $"-d {WslService.DistroName} --user root -- bash -l -c \"openclaw pairing approve dingtalk {code}\"",
+                line => output += line + "\n");
+
+            Dispatcher.Invoke(() =>
+            {
+                if (exitCode == 0)
+                {
+                    TxtDingtalkPairingStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
+                    TxtDingtalkPairingStatus.Text = "配对成功";
+                    TxtDingtalkPairingCode.Text = "";
+                }
+                else
+                {
+                    TxtDingtalkPairingStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+                    TxtDingtalkPairingStatus.Text = $"配对失败: {output.Trim()}";
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            TxtDingtalkPairingStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+            TxtDingtalkPairingStatus.Text = $"配对失败: {ex.Message}";
+        }
+        finally
+        {
+            BtnDingtalkPairingApprove.IsEnabled = true;
+        }
+    }
+
+    private async void BtnDingtalkInstallPlugin_Click(object sender, RoutedEventArgs e)
+    {
+        BtnDingtalkInstallPlugin.IsEnabled = false;
+        TxtDingtalkPluginStatus.Text = "插件状态: 正在安装...";
+
+        try
+        {
+            var success = await _configService.InstallDingTalkPluginAsync(line =>
+                Dispatcher.Invoke(() => OnGatewayLogReceived(line)));
+
+            Dispatcher.Invoke(() =>
+            {
+                if (success)
+                {
+                    TxtDingtalkPluginStatus.Text = "插件状态: 已安装";
+                    TxtDingtalkPluginStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
+                    BtnDingtalkInstallPlugin.Visibility = Visibility.Collapsed;
+                    PanelDingtalkConfig.IsEnabled = true;
+                }
+                else
+                {
+                    TxtDingtalkPluginStatus.Text = "插件状态: 安装失败";
+                    TxtDingtalkPluginStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+                    BtnDingtalkInstallPlugin.IsEnabled = true;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            TxtDingtalkPluginStatus.Text = $"插件状态: 安装失败 ({ex.Message})";
+            TxtDingtalkPluginStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+            BtnDingtalkInstallPlugin.IsEnabled = true;
+        }
+    }
+
+    private async Task CheckDingtalkPluginStatusAsync()
+    {
+        try
+        {
+            var installed = await _configService.IsDingTalkPluginInstalledAsync();
+            Dispatcher.Invoke(() =>
+            {
+                if (installed)
+                {
+                    TxtDingtalkPluginStatus.Text = "插件状态: 已安装";
+                    TxtDingtalkPluginStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
+                    BtnDingtalkInstallPlugin.Visibility = Visibility.Collapsed;
+                    PanelDingtalkConfig.IsEnabled = true;
+                }
+                else
+                {
+                    TxtDingtalkPluginStatus.Text = "插件状态: 未安装";
+                    TxtDingtalkPluginStatus.Foreground = (SolidColorBrush)FindResource("WarningBrush");
+                    BtnDingtalkInstallPlugin.Visibility = Visibility.Visible;
+                    PanelDingtalkConfig.IsEnabled = false;
+                }
+            });
+        }
+        catch
+        {
+            Dispatcher.Invoke(() =>
+            {
+                TxtDingtalkPluginStatus.Text = "插件状态: 检测失败";
+                TxtDingtalkPluginStatus.Foreground = (SolidColorBrush)FindResource("TextSecondaryBrush");
+                BtnDingtalkInstallPlugin.Visibility = Visibility.Visible;
+                PanelDingtalkConfig.IsEnabled = false;
+            });
+        }
+    }
+
+    // ── 启动时自动补装钉钉插件（覆盖旧版本升级场景） ──────────────────────────
+
+    private async Task EnsureDingtalkPluginInstalledAsync()
+    {
+        try
+        {
+            var installed = await _configService.IsDingTalkPluginInstalledAsync();
+            if (installed) return;
+
+            await _configService.InstallDingTalkPluginAsync(line =>
+                Dispatcher.Invoke(() => OnGatewayLogReceived(line)));
+        }
+        catch { /* 非致命，静默忽略 */ }
     }
 
     // ── 设置页 ──────────────────────────────────────────────────────────────
@@ -722,12 +877,43 @@ public partial class MainWindow : Window
                             PanelFeishuVerifyToken.Visibility = mode == "webhook"
                                 ? Visibility.Visible : Visibility.Collapsed;
                             break;
+
+                        case "dingtalk":
+                            ChkDingtalkEnabled.IsChecked = ch.Enabled;
+                            if (ch.Properties.TryGetValue("clientId", out var dtClientId))
+                                TxtDingtalkClientId.Text = dtClientId;
+                            if (ch.Properties.TryGetValue("clientSecret", out var dtClientSecret))
+                                PwdDingtalkClientSecret.Password = dtClientSecret;
+                            if (ch.Properties.TryGetValue("robotCode", out var dtRobotCode))
+                                TxtDingtalkRobotCode.Text = dtRobotCode;
+                            if (ch.Properties.TryGetValue("corpId", out var dtCorpId))
+                                TxtDingtalkCorpId.Text = dtCorpId;
+                            if (ch.Properties.TryGetValue("agentId", out var dtAgentId))
+                                TxtDingtalkAgentId.Text = dtAgentId;
+                            if (ch.Properties.TryGetValue("dmPolicy", out var dtDmPolicy))
+                                SelectComboItem(CboDingtalkDmPolicy, dtDmPolicy);
+                            if (ch.Properties.TryGetValue("groupPolicy", out var dtGroupPolicy))
+                                SelectComboItem(CboDingtalkGroupPolicy, dtGroupPolicy);
+                            if (ch.Properties.TryGetValue("messageType", out var dtMsgType))
+                            {
+                                SelectComboItem(CboDingtalkMessageType, dtMsgType);
+                                PanelDingtalkCard.Visibility = dtMsgType == "card"
+                                    ? Visibility.Visible : Visibility.Collapsed;
+                            }
+                            if (ch.Properties.TryGetValue("cardTemplateId", out var dtCardTplId))
+                                TxtDingtalkCardTemplateId.Text = dtCardTplId;
+                            if (ch.Properties.TryGetValue("cardTemplateKey", out var dtCardTplKey))
+                                TxtDingtalkCardTemplateKey.Text = dtCardTplKey;
+                            break;
                     }
                 }
 
                 SettingsLoading.Visibility = Visibility.Collapsed;
                 _settingsLoaded = true;
                 ApplySettingsTab();
+
+                // Check DingTalk plugin status asynchronously
+                _ = CheckDingtalkPluginStatusAsync();
             });
         }
         catch (Exception ex)
@@ -1013,10 +1199,47 @@ public partial class MainWindow : Window
                 feishu.Properties["verifyToken"] = PwdFeishuVerifyToken.Password;
             allFailures.AddRange(await _configService.SaveChannelAsync(feishu));
 
+            // DingTalk
+            var dingtalk = new ChannelConfig { Name = "dingtalk", Enabled = ChkDingtalkEnabled.IsChecked == true };
+            if (!string.IsNullOrEmpty(TxtDingtalkClientId.Text))
+                dingtalk.Properties["clientId"] = TxtDingtalkClientId.Text.Trim();
+            if (!string.IsNullOrEmpty(PwdDingtalkClientSecret.Password))
+                dingtalk.Properties["clientSecret"] = PwdDingtalkClientSecret.Password;
+            if (!string.IsNullOrEmpty(TxtDingtalkRobotCode.Text))
+                dingtalk.Properties["robotCode"] = TxtDingtalkRobotCode.Text.Trim();
+            if (!string.IsNullOrEmpty(TxtDingtalkCorpId.Text))
+                dingtalk.Properties["corpId"] = TxtDingtalkCorpId.Text.Trim();
+            if (!string.IsNullOrEmpty(TxtDingtalkAgentId.Text))
+                dingtalk.Properties["agentId"] = TxtDingtalkAgentId.Text.Trim();
+            var dtDmPolicyVal = (CboDingtalkDmPolicy.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "open";
+            dingtalk.Properties["dmPolicy"] = dtDmPolicyVal;
+            var dtGroupPolicyVal = (CboDingtalkGroupPolicy.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "open";
+            dingtalk.Properties["groupPolicy"] = dtGroupPolicyVal;
+            var dtMsgTypeVal = (CboDingtalkMessageType.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "markdown";
+            dingtalk.Properties["messageType"] = dtMsgTypeVal;
+            if (dtMsgTypeVal == "card")
+            {
+                if (!string.IsNullOrEmpty(TxtDingtalkCardTemplateId.Text))
+                    dingtalk.Properties["cardTemplateId"] = TxtDingtalkCardTemplateId.Text.Trim();
+                if (!string.IsNullOrEmpty(TxtDingtalkCardTemplateKey.Text))
+                    dingtalk.Properties["cardTemplateKey"] = TxtDingtalkCardTemplateKey.Text.Trim();
+            }
+            allFailures.AddRange(await _configService.SaveChannelAsync(dingtalk));
+
             if (allFailures.Count == 0)
             {
-                TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
-                TxtChannelSaveStatus.Text = "保存成功";
+                // Gateway 可能因配置变更而退出，自动重启
+                if (_lastStatus == GatewayStatus.Running || await _gateway.IsRunningAsync())
+                {
+                    TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
+                    TxtChannelSaveStatus.Text = "保存成功，正在重启 Gateway...";
+                    await _gateway.RestartAsync();
+                }
+                else
+                {
+                    TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
+                    TxtChannelSaveStatus.Text = "保存成功";
+                }
             }
             else
             {

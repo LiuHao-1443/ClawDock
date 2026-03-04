@@ -81,6 +81,23 @@ public class OpenClawService
         }
 
         onLog("✓ OpenClaw 安装完成");
+        onLog("");
+
+        // 自动安装钉钉插件（非致命，失败不阻断）
+        try
+        {
+            onLog("▶ 安装钉钉渠道插件...");
+            var configService = new OpenClawConfigService();
+            var pluginOk = await configService.InstallDingTalkPluginAsync(line => onLog("  " + line));
+            if (pluginOk)
+                onLog("  ✓ 钉钉插件安装完成");
+            else
+                onLog("  ⚠ 钉钉插件安装失败，可稍后在设置中手动安装");
+        }
+        catch (Exception ex)
+        {
+            onLog($"  ⚠ 钉钉插件安装失败: {ex.Message}，可稍后在设置中手动安装");
+        }
     }
 
     private static string EscapeForBash(string cmd)
