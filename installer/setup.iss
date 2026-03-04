@@ -3,7 +3,7 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define AppName "ClawDock"
-#define AppVersion "0.7.1"
+#define AppVersion "0.7.2"
 #define AppPublisher "野生刘同学"
 #define AppURL "https://github.com/openclaw/openclaw"
 #define AppExeName "ClawDock.exe"
