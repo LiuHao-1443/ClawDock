@@ -174,7 +174,7 @@ public class OpenClawConfigService
     {
         var channels = new List<ChannelConfig>();
         var root = doc.RootElement;
-        string[] knownChannels = ["feishu", "dingtalk"];
+        string[] knownChannels = ["feishu", "dingtalk-connector"];
 
         try
         {
@@ -389,10 +389,9 @@ public class OpenClawConfigService
     /// <summary>Check if the DingTalk plugin is installed with dependencies</summary>
     public async Task<bool> IsDingTalkPluginInstalledAsync()
     {
-        // Check both: plugin directory exists AND its key dependency is present
         var found = false;
         await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"test -d /root/.openclaw/extensions/dingtalk/node_modules/dingtalk-stream && echo OK\"",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"test -d /root/.openclaw/extensions/dingtalk-connector/node_modules/dingtalk-stream && echo OK\"",
             line =>
             {
                 if (line.Trim() == "OK")
@@ -401,7 +400,7 @@ public class OpenClawConfigService
         return found;
     }
 
-    /// <summary>Install the DingTalk community plugin and configure plugins.allow</summary>
+    /// <summary>Install the official DingTalk plugin and configure plugins.allow</summary>
     public async Task<bool> InstallDingTalkPluginAsync(Action<string>? onLog = null)
     {
         onLog ??= _ => { };
@@ -409,39 +408,21 @@ public class OpenClawConfigService
         // 1. Remove existing plugin directory if present (avoids "plugin already exists" error)
         onLog("正在安装钉钉插件...");
         await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"rm -rf /root/.openclaw/extensions/dingtalk\"",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"rm -rf /root/.openclaw/extensions/dingtalk-connector\"",
             _ => { });
 
-        // 2. Install the plugin package (may fail internally due to npm peer conflicts, that's OK)
-        await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"openclaw plugins install @soimy/dingtalk\"",
+        // 2. Install the official plugin package
+        var exitCode = await WslService.RunCommandStreamAsync("wsl",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"openclaw plugins install @dingtalk-real-ai/dingtalk-connector\"",
             line => onLog(line));
 
-        // 3. Verify plugin directory was created
-        var dirExists = false;
-        await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"test -d /root/.openclaw/extensions/dingtalk && echo OK\"",
-            line => { if (line.Trim() == "OK") dirExists = true; });
-
-        if (!dirExists)
+        if (exitCode != 0)
         {
-            onLog("钉钉插件安装失败: 插件目录未创建");
+            onLog("钉钉插件安装失败");
             return false;
         }
 
-        // 4. Install npm dependencies ourselves with correct flags (skip devDeps to avoid peer conflicts)
-        onLog("正在安装插件依赖...");
-        var depExitCode = await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"cd /root/.openclaw/extensions/dingtalk && npm install --omit=dev --legacy-peer-deps 2>&1\"",
-            line => onLog(line));
-
-        if (depExitCode != 0)
-        {
-            onLog("插件依赖安装失败");
-            return false;
-        }
-
-        // 2. Enable plugins and add to allow list via node script
+        // 3. Enable plugins and add to allow list via node script
         var script = """
             const fs = require('fs');
             const CONFIG_PATH = '/root/.openclaw/openclaw.json';
@@ -449,8 +430,13 @@ public class OpenClawConfigService
             if (!cfg.plugins) cfg.plugins = {};
             cfg.plugins.enabled = true;
             if (!cfg.plugins.allow) cfg.plugins.allow = [];
-            if (!cfg.plugins.allow.includes('dingtalk'))
-                cfg.plugins.allow.push('dingtalk');
+            if (!cfg.plugins.allow.includes('dingtalk-connector'))
+                cfg.plugins.allow.push('dingtalk-connector');
+            if (!cfg.gateway) cfg.gateway = {};
+            if (!cfg.gateway.http) cfg.gateway.http = {};
+            if (!cfg.gateway.http.endpoints) cfg.gateway.http.endpoints = {};
+            if (!cfg.gateway.http.endpoints.chatCompletions) cfg.gateway.http.endpoints.chatCompletions = {};
+            cfg.gateway.http.endpoints.chatCompletions.enabled = true;
             fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
             console.log('OK');
             """;
