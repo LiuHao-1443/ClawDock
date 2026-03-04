@@ -440,4 +440,29 @@ public class OpenClawConfigService
 
         return ok;
     }
+
+    /// <summary>Sync gateway.auth.token into channels.dingtalk-connector.gatewayToken (must run after Gateway restart)</summary>
+    public async Task SyncGatewayTokenToDingtalkAsync()
+    {
+        var script = """
+            const fs = require('fs');
+            const CONFIG_PATH = '/root/.openclaw/openclaw.json';
+            const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+            const token = cfg.gateway?.auth?.token || '';
+            if (token && cfg.channels?.['dingtalk-connector']) {
+                cfg.channels['dingtalk-connector'].gatewayToken = token;
+                fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+                console.log('OK');
+            } else {
+                console.log('SKIP');
+            }
+            """;
+
+        var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(script));
+        var wrapperCmd = $"echo {b64} | base64 -d | node -";
+
+        await WslService.RunCommandStreamAsync("wsl",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"{wrapperCmd}\"",
+            _ => { });
+    }
 }

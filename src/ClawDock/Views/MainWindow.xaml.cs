@@ -154,10 +154,12 @@ public partial class MainWindow : Window
         }
 
         // token 未就绪 → 后台读取，读完再导航（避免阻塞 UI 线程）
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
             _gateway.ReadAuthToken();
             Dispatcher.Invoke(() => NavigateIfNeeded(_gateway.DashboardUrl));
+            // 每次 Gateway 启动后同步 token 到钉钉渠道配置
+            await _configService.SyncGatewayTokenToDingtalkAsync();
         });
     }
 
@@ -1176,10 +1178,6 @@ public partial class MainWindow : Window
             dingtalk.Properties["dmPolicy"] = dtDmPolicyVal;
             var dtGroupPolicyVal = (CboDingtalkGroupPolicy.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "open";
             dingtalk.Properties["groupPolicy"] = dtGroupPolicyVal;
-            // 自动注入 Gateway auth token，插件需要它来调用 /v1/chat/completions
-            await Task.Run(() => _gateway.ReadAuthToken());
-            if (!string.IsNullOrEmpty(_gateway.AuthToken))
-                dingtalk.Properties["gatewayToken"] = _gateway.AuthToken;
             allFailures.AddRange(await _configService.SaveChannelAsync(dingtalk));
 
             if (allFailures.Count == 0)
@@ -1196,6 +1194,9 @@ public partial class MainWindow : Window
                     TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
                     TxtChannelSaveStatus.Text = "保存成功";
                 }
+
+                // Gateway 重启后 token 会变，同步到钉钉渠道配置
+                await _configService.SyncGatewayTokenToDingtalkAsync();
             }
             else
             {
