@@ -31,8 +31,11 @@ if (-not $SkipInno) {
     $iscc = Get-Command iscc -ErrorAction SilentlyContinue
     if (-not $iscc) {
         $defaultPath = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
+        $userPath = "$env:LOCALAPPDATA\Programs\Inno Setup 6\iscc.exe"
         if (Test-Path $defaultPath) {
             $iscc = $defaultPath
+        } elseif (Test-Path $userPath) {
+            $iscc = $userPath
         } else {
             Write-Error "未找到 Inno Setup (iscc.exe)。请安装: https://jrsoftware.org/isinfo.php 或使用 -SkipInno 跳过"
         }

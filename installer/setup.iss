@@ -3,7 +3,7 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define AppName "ClawDock"
-#define AppVersion "0.6.0"
+#define AppVersion "0.7.1"
 #define AppPublisher "野生刘同学"
 #define AppURL "https://github.com/openclaw/openclaw"
 #define AppExeName "ClawDock.exe"
@@ -64,18 +64,20 @@ Filename: "taskkill"; Parameters: "/F /IM {#AppExeName}"; Flags: runhidden; RunO
 [Code]
 function InitializeSetup(): Boolean;
 var
-  Build: Cardinal;
+  BuildStr: String;
+  Build: Integer;
 begin
   Result := True;
-  if not RegQueryDWordValue(HKEY_LOCAL_MACHINE,
+  if not RegQueryStringValue(HKEY_LOCAL_MACHINE,
     'SOFTWARE\Microsoft\Windows NT\CurrentVersion',
-    'CurrentBuildNumber', Build) then
+    'CurrentBuildNumber', BuildStr) then
   begin
     MsgBox('无法读取 Windows 版本信息。', mbError, MB_OK);
     Result := False;
     Exit;
   end;
 
+  Build := StrToIntDef(BuildStr, 0);
   if Build < 19041 then
   begin
     MsgBox(Format(
