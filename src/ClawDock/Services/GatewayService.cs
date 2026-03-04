@@ -9,7 +9,7 @@ public enum GatewayStatus { Stopped, Starting, Running, Error }
 
 public class GatewayService
 {
-    private const string GatewayUrl = "http://localhost:18789";
+    private const string GatewayUrl = "http://127.0.0.1:18789";
     private const int Port = 18789;
 
     private volatile bool _gatewayReady;
@@ -28,6 +28,7 @@ public class GatewayService
         : $"{GatewayUrl}?token={_authToken}";
 
     private string _authToken = string.Empty;
+    public string AuthToken => _authToken;
 
     // ── 启动 ─────────────────────────────────────────────────────────────
 
@@ -233,7 +234,7 @@ public class GatewayService
     {
         try
         {
-            var p = Process.Start(new ProcessStartInfo
+            using var p = Process.Start(new ProcessStartInfo
             {
                 FileName = "wsl",
                 Arguments = $"-d {WslService.DistroName} --user root -- bash -c \"cat ~/.openclaw/openclaw.json\"",
@@ -264,7 +265,7 @@ public class GatewayService
             var jsonStart = output.IndexOf('{');
             if (jsonStart < 0) { _authToken = string.Empty; return; }
 
-            var json = JsonDocument.Parse(output[jsonStart..]);
+            using var json = JsonDocument.Parse(output[jsonStart..]);
             _authToken = json.RootElement
                 .GetProperty("gateway")
                 .GetProperty("auth")

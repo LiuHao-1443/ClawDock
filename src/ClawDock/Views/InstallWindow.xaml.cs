@@ -317,7 +317,6 @@ public partial class InstallWindow : Window
             WriteLog("OpenClaw 安装完成");
             _stateService.MarkOpenClawDone();
             ClearResumeOnReboot();
-            CreateDesktopShortcut();
 
             NavigateTo(5);
         }
@@ -348,42 +347,6 @@ public partial class InstallWindow : Window
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
             @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
         key?.DeleteValue("ClawDockResume", throwOnMissingValue: false);
-    }
-
-    // ── 桌面快捷方式 ──────────────────────────────────────────────────────
-
-    private void CreateDesktopShortcut()
-    {
-        try
-        {
-            var exePath = Process.GetCurrentProcess().MainModule?.FileName;
-            if (exePath == null) return;
-
-            var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            var lnkPath = Path.Combine(desktopPath, "ClawDock.lnk");
-
-            if (File.Exists(lnkPath)) return;
-
-            var ps = $"$s=(New-Object -COM WScript.Shell).CreateShortcut('{lnkPath}');" +
-                     $"$s.TargetPath='{exePath}';" +
-                     $"$s.IconLocation='{exePath}';" +
-                     "$s.Save()";
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = "powershell",
-                Arguments = $"-NoProfile -Command \"{ps}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            Process.Start(psi)?.WaitForExit(5000);
-
-            WriteLog("桌面快捷方式已创建");
-        }
-        catch (Exception ex)
-        {
-            WriteLog($"创建桌面快捷方式失败: {ex.Message}");
-        }
     }
 
     // ── 状态图标辅助 ──────────────────────────────────────────────────────

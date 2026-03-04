@@ -144,20 +144,12 @@ public partial class MainWindow : Window
         PageInitializing.Visibility = Visibility.Collapsed;
         PageSettings.Visibility    = Visibility.Collapsed;
 
-        var url = _gateway.DashboardUrl;
-
-        // token 已就绪 → 直接导航
-        if (url.Contains("token="))
-        {
-            NavigateIfNeeded(url);
-            return;
-        }
-
-        // token 未就绪 → 后台读取，读完再导航（避免阻塞 UI 线程）
-        _ = Task.Run(() =>
+        // 后台读取最新 token，导航，并同步到钉钉配置
+        _ = Task.Run(async () =>
         {
             _gateway.ReadAuthToken();
             Dispatcher.Invoke(() => NavigateIfNeeded(_gateway.DashboardUrl));
+            await _configService.SyncGatewayTokenToDingtalkAsync();
         });
     }
 
@@ -428,10 +420,10 @@ public partial class MainWindow : Window
     private async void BtnFeishuPairingApprove_Click(object sender, RoutedEventArgs e)
     {
         var code = TxtFeishuPairingCode.Text?.Trim();
-        if (string.IsNullOrEmpty(code))
+        if (string.IsNullOrEmpty(code) || !System.Text.RegularExpressions.Regex.IsMatch(code, @"^[a-zA-Z0-9\-_]+$"))
         {
             TxtFeishuPairingStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
-            TxtFeishuPairingStatus.Text = "请输入配对码";
+            TxtFeishuPairingStatus.Text = string.IsNullOrEmpty(code) ? "请输入配对码" : "配对码格式无效";
             return;
         }
 
@@ -484,32 +476,13 @@ public partial class MainWindow : Window
 
     // ── 钉钉事件处理 ─────────────────────────────────────────────────────────
 
-    private void CboDingtalkMessageType_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (PanelDingtalkCard == null) return;
-        var msgType = (CboDingtalkMessageType.SelectedItem as ComboBoxItem)?.Content?.ToString();
-        PanelDingtalkCard.Visibility = msgType == "card"
-            ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private bool _dingtalkAdvancedExpanded;
-
-    private void BtnDingtalkAdvancedToggle_Click(object sender, RoutedEventArgs e)
-    {
-        _dingtalkAdvancedExpanded = !_dingtalkAdvancedExpanded;
-        PanelDingtalkAdvanced.Visibility = _dingtalkAdvancedExpanded
-            ? Visibility.Visible : Visibility.Collapsed;
-        BtnDingtalkAdvancedToggle.Content = _dingtalkAdvancedExpanded
-            ? "▼ 高级设置" : "▶ 高级设置";
-    }
-
     private async void BtnDingtalkPairingApprove_Click(object sender, RoutedEventArgs e)
     {
         var code = TxtDingtalkPairingCode.Text?.Trim();
-        if (string.IsNullOrEmpty(code))
+        if (string.IsNullOrEmpty(code) || !System.Text.RegularExpressions.Regex.IsMatch(code, @"^[a-zA-Z0-9\-_]+$"))
         {
             TxtDingtalkPairingStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
-            TxtDingtalkPairingStatus.Text = "请输入配对码";
+            TxtDingtalkPairingStatus.Text = string.IsNullOrEmpty(code) ? "请输入配对码" : "配对码格式无效";
             return;
         }
 
@@ -521,7 +494,7 @@ public partial class MainWindow : Window
         {
             var output = "";
             var exitCode = await WslService.RunCommandStreamAsync("wsl",
-                $"-d {WslService.DistroName} --user root -- bash -l -c \"openclaw pairing approve dingtalk {code}\"",
+                $"-d {WslService.DistroName} --user root -- bash -l -c \"openclaw pairing approve dingtalk-connector {code}\"",
                 line => output += line + "\n");
 
             Dispatcher.Invoke(() =>
@@ -579,9 +552,12 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            TxtDingtalkPluginStatus.Text = $"插件状态: 安装失败 ({ex.Message})";
-            TxtDingtalkPluginStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
-            BtnDingtalkInstallPlugin.IsEnabled = true;
+            Dispatcher.Invoke(() =>
+            {
+                TxtDingtalkPluginStatus.Text = $"插件状态: 安装失败 ({ex.Message})";
+                TxtDingtalkPluginStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+                BtnDingtalkInstallPlugin.IsEnabled = true;
+            });
         }
     }
 
@@ -878,32 +854,16 @@ public partial class MainWindow : Window
                                 ? Visibility.Visible : Visibility.Collapsed;
                             break;
 
-                        case "dingtalk":
+                        case "dingtalk-connector":
                             ChkDingtalkEnabled.IsChecked = ch.Enabled;
                             if (ch.Properties.TryGetValue("clientId", out var dtClientId))
                                 TxtDingtalkClientId.Text = dtClientId;
                             if (ch.Properties.TryGetValue("clientSecret", out var dtClientSecret))
                                 PwdDingtalkClientSecret.Password = dtClientSecret;
-                            if (ch.Properties.TryGetValue("robotCode", out var dtRobotCode))
-                                TxtDingtalkRobotCode.Text = dtRobotCode;
-                            if (ch.Properties.TryGetValue("corpId", out var dtCorpId))
-                                TxtDingtalkCorpId.Text = dtCorpId;
-                            if (ch.Properties.TryGetValue("agentId", out var dtAgentId))
-                                TxtDingtalkAgentId.Text = dtAgentId;
                             if (ch.Properties.TryGetValue("dmPolicy", out var dtDmPolicy))
                                 SelectComboItem(CboDingtalkDmPolicy, dtDmPolicy);
                             if (ch.Properties.TryGetValue("groupPolicy", out var dtGroupPolicy))
                                 SelectComboItem(CboDingtalkGroupPolicy, dtGroupPolicy);
-                            if (ch.Properties.TryGetValue("messageType", out var dtMsgType))
-                            {
-                                SelectComboItem(CboDingtalkMessageType, dtMsgType);
-                                PanelDingtalkCard.Visibility = dtMsgType == "card"
-                                    ? Visibility.Visible : Visibility.Collapsed;
-                            }
-                            if (ch.Properties.TryGetValue("cardTemplateId", out var dtCardTplId))
-                                TxtDingtalkCardTemplateId.Text = dtCardTplId;
-                            if (ch.Properties.TryGetValue("cardTemplateKey", out var dtCardTplKey))
-                                TxtDingtalkCardTemplateKey.Text = dtCardTplKey;
                             break;
                     }
                 }
@@ -1159,7 +1119,6 @@ public partial class MainWindow : Window
             }
             else
             {
-                OpenClawConfigService.LogExt($"Save failures: {string.Join(", ", failures)}");
                 TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
                 TxtModelSaveStatus.Text = $"部分保存失败: {string.Join(", ", failures)}";
             }
@@ -1200,30 +1159,15 @@ public partial class MainWindow : Window
             allFailures.AddRange(await _configService.SaveChannelAsync(feishu));
 
             // DingTalk
-            var dingtalk = new ChannelConfig { Name = "dingtalk", Enabled = ChkDingtalkEnabled.IsChecked == true };
+            var dingtalk = new ChannelConfig { Name = "dingtalk-connector", Enabled = ChkDingtalkEnabled.IsChecked == true };
             if (!string.IsNullOrEmpty(TxtDingtalkClientId.Text))
                 dingtalk.Properties["clientId"] = TxtDingtalkClientId.Text.Trim();
             if (!string.IsNullOrEmpty(PwdDingtalkClientSecret.Password))
                 dingtalk.Properties["clientSecret"] = PwdDingtalkClientSecret.Password;
-            if (!string.IsNullOrEmpty(TxtDingtalkRobotCode.Text))
-                dingtalk.Properties["robotCode"] = TxtDingtalkRobotCode.Text.Trim();
-            if (!string.IsNullOrEmpty(TxtDingtalkCorpId.Text))
-                dingtalk.Properties["corpId"] = TxtDingtalkCorpId.Text.Trim();
-            if (!string.IsNullOrEmpty(TxtDingtalkAgentId.Text))
-                dingtalk.Properties["agentId"] = TxtDingtalkAgentId.Text.Trim();
             var dtDmPolicyVal = (CboDingtalkDmPolicy.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "open";
             dingtalk.Properties["dmPolicy"] = dtDmPolicyVal;
             var dtGroupPolicyVal = (CboDingtalkGroupPolicy.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "open";
             dingtalk.Properties["groupPolicy"] = dtGroupPolicyVal;
-            var dtMsgTypeVal = (CboDingtalkMessageType.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "markdown";
-            dingtalk.Properties["messageType"] = dtMsgTypeVal;
-            if (dtMsgTypeVal == "card")
-            {
-                if (!string.IsNullOrEmpty(TxtDingtalkCardTemplateId.Text))
-                    dingtalk.Properties["cardTemplateId"] = TxtDingtalkCardTemplateId.Text.Trim();
-                if (!string.IsNullOrEmpty(TxtDingtalkCardTemplateKey.Text))
-                    dingtalk.Properties["cardTemplateKey"] = TxtDingtalkCardTemplateKey.Text.Trim();
-            }
             allFailures.AddRange(await _configService.SaveChannelAsync(dingtalk));
 
             if (allFailures.Count == 0)
@@ -1240,6 +1184,7 @@ public partial class MainWindow : Window
                     TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
                     TxtChannelSaveStatus.Text = "保存成功";
                 }
+
             }
             else
             {

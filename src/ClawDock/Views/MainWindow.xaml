@@ -496,62 +496,22 @@
                                         <PasswordBox x:Name="PwdDingtalkClientSecret" Style="{StaticResource DarkPasswordBox}"
                                                      Margin="0,0,0,12"/>
 
-                                        <!-- 高级设置折叠区 -->
-                                        <Button x:Name="BtnDingtalkAdvancedToggle" Content="▶ 高级设置"
-                                                Style="{StaticResource SecondaryButton}"
-                                                Click="BtnDingtalkAdvancedToggle_Click"
-                                                HorizontalAlignment="Left" Padding="12,4"
-                                                FontSize="12" Margin="0,0,0,8"/>
+                                        <TextBlock Text="私聊策略 (DM Policy)" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox x:Name="CboDingtalkDmPolicy" Style="{StaticResource DarkComboBoxReadOnly}"
+                                                  ItemContainerStyle="{StaticResource DarkComboBoxItem}"
+                                                  Margin="0,0,0,12">
+                                            <ComboBoxItem Content="open" IsSelected="True"/>
+                                            <ComboBoxItem Content="pairing"/>
+                                            <ComboBoxItem Content="allowlist"/>
+                                        </ComboBox>
 
-                                        <StackPanel x:Name="PanelDingtalkAdvanced" Visibility="Collapsed">
-                                            <TextBlock Text="机器人代码 (Robot Code)" Style="{StaticResource FieldLabel}"/>
-                                            <TextBox x:Name="TxtDingtalkRobotCode" Style="{StaticResource DarkTextBox}"
-                                                     Margin="0,0,0,12"/>
-
-                                            <TextBlock Text="企业 ID (Corp ID)" Style="{StaticResource FieldLabel}"/>
-                                            <TextBox x:Name="TxtDingtalkCorpId" Style="{StaticResource DarkTextBox}"
-                                                     Margin="0,0,0,12"/>
-
-                                            <TextBlock Text="应用 ID (Agent ID)" Style="{StaticResource FieldLabel}"/>
-                                            <TextBox x:Name="TxtDingtalkAgentId" Style="{StaticResource DarkTextBox}"
-                                                     Margin="0,0,0,12"/>
-
-                                            <TextBlock Text="私聊策略 (DM Policy)" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox x:Name="CboDingtalkDmPolicy" Style="{StaticResource DarkComboBoxReadOnly}"
-                                                      ItemContainerStyle="{StaticResource DarkComboBoxItem}"
-                                                      Margin="0,0,0,12">
-                                                <ComboBoxItem Content="open" IsSelected="True"/>
-                                                <ComboBoxItem Content="pairing"/>
-                                                <ComboBoxItem Content="allowlist"/>
-                                            </ComboBox>
-
-                                            <TextBlock Text="群聊策略 (Group Policy)" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox x:Name="CboDingtalkGroupPolicy" Style="{StaticResource DarkComboBoxReadOnly}"
-                                                      ItemContainerStyle="{StaticResource DarkComboBoxItem}"
-                                                      Margin="0,0,0,12">
-                                                <ComboBoxItem Content="open" IsSelected="True"/>
-                                                <ComboBoxItem Content="allowlist"/>
-                                            </ComboBox>
-
-                                            <TextBlock Text="消息类型 (Message Type)" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox x:Name="CboDingtalkMessageType" Style="{StaticResource DarkComboBoxReadOnly}"
-                                                      ItemContainerStyle="{StaticResource DarkComboBoxItem}"
-                                                      SelectionChanged="CboDingtalkMessageType_SelectionChanged"
-                                                      Margin="0,0,0,12">
-                                                <ComboBoxItem Content="markdown" IsSelected="True"/>
-                                                <ComboBoxItem Content="card"/>
-                                            </ComboBox>
-
-                                            <!-- 卡片配置（仅 card 模式显示） -->
-                                            <StackPanel x:Name="PanelDingtalkCard" Visibility="Collapsed">
-                                                <TextBlock Text="卡片模板 ID" Style="{StaticResource FieldLabel}"/>
-                                                <TextBox x:Name="TxtDingtalkCardTemplateId" Style="{StaticResource DarkTextBox}"
-                                                         Margin="0,0,0,12"/>
-                                                <TextBlock Text="卡片模板 Key" Style="{StaticResource FieldLabel}"/>
-                                                <TextBox x:Name="TxtDingtalkCardTemplateKey" Style="{StaticResource DarkTextBox}"
-                                                         Margin="0,0,0,12"/>
-                                            </StackPanel>
-                                        </StackPanel>
+                                        <TextBlock Text="群聊策略 (Group Policy)" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox x:Name="CboDingtalkGroupPolicy" Style="{StaticResource DarkComboBoxReadOnly}"
+                                                  ItemContainerStyle="{StaticResource DarkComboBoxItem}"
+                                                  Margin="0,0,0,12">
+                                            <ComboBoxItem Content="open" IsSelected="True"/>
+                                            <ComboBoxItem Content="allowlist"/>
+                                        </ComboBox>
 
                                         <!-- 配对批准 -->
                                         <Border BorderBrush="{StaticResource BorderBrush}"

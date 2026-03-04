@@ -174,7 +174,7 @@ public class OpenClawConfigService
     {
         var channels = new List<ChannelConfig>();
         var root = doc.RootElement;
-        string[] knownChannels = ["feishu", "dingtalk"];
+        string[] knownChannels = ["feishu", "dingtalk-connector"];
 
         try
         {
@@ -237,27 +237,15 @@ public class OpenClawConfigService
     }
 
     /// <summary>Set a single config key via openclaw config set (base64 pipe to avoid escaping)</summary>
-    private static readonly string LogPath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "clawdock_debug.log");
-    public static void LogExt(string msg) => Log(msg);
-    private static void Log(string msg)
-    {
-        try { System.IO.File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss} {msg}\n"); } catch { }
-    }
-
     public async Task<bool> SetConfigAsync(string key, string value)
     {
         var script = $"openclaw config set {key} '{value.Replace("'", "'\"'\"'")}'";
         var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(script));
         var wrapperCmd = $"echo {b64} | base64 -d | bash -l";
 
-        Log($"[SetConfig] key={key}");
-        Log($"[SetConfig] script={script}");
-
         var exitCode = await WslService.RunCommandStreamAsync("wsl",
             $"-d {WslService.DistroName} --user root -- bash -c \"{wrapperCmd}\"",
-            line => Log($"[SetConfig] output: {line}"));
-        Log($"[SetConfig] exitCode={exitCode}");
+            _ => { });
         return exitCode == 0;
     }
 
@@ -319,8 +307,6 @@ public class OpenClawConfigService
     /// <summary>Save API key for a provider via auth-profiles.json + openclaw.json auth section</summary>
     public async Task<bool> SaveProviderApiKeyAsync(string providerName, string apiKey)
     {
-        Log($"[SaveProviderApiKey] provider={providerName}, apiKey length={apiKey.Length}");
-
         var profileId = $"{providerName}:manual";
 
         // 通过 node 脚本写入 auth-profiles.json 和 openclaw.json auth 配置
@@ -362,9 +348,7 @@ public class OpenClawConfigService
         var ok = false;
         var exitCode = await WslService.RunCommandStreamAsync("wsl",
             $"-d {WslService.DistroName} --user root -- bash -l -c \"{wrapperCmd}\"",
-            line => { Log($"[SaveProviderApiKey] output: {line}"); if (line.Trim() == "OK") ok = true; });
-
-        Log($"[SaveProviderApiKey] exitCode={exitCode}, ok={ok}");
+            line => { if (line.Trim() == "OK") ok = true; });
         return exitCode == 0 && ok;
     }
 
@@ -389,10 +373,9 @@ public class OpenClawConfigService
     /// <summary>Check if the DingTalk plugin is installed with dependencies</summary>
     public async Task<bool> IsDingTalkPluginInstalledAsync()
     {
-        // Check both: plugin directory exists AND its key dependency is present
         var found = false;
         await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"test -d /root/.openclaw/extensions/dingtalk/node_modules/dingtalk-stream && echo OK\"",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"test -d /root/.openclaw/extensions/dingtalk-connector/node_modules/dingtalk-stream && echo OK\"",
             line =>
             {
                 if (line.Trim() == "OK")
@@ -401,7 +384,7 @@ public class OpenClawConfigService
         return found;
     }
 
-    /// <summary>Install the DingTalk community plugin and configure plugins.allow</summary>
+    /// <summary>Install the official DingTalk plugin and configure plugins.allow</summary>
     public async Task<bool> InstallDingTalkPluginAsync(Action<string>? onLog = null)
     {
         onLog ??= _ => { };
@@ -409,39 +392,21 @@ public class OpenClawConfigService
         // 1. Remove existing plugin directory if present (avoids "plugin already exists" error)
         onLog("正在安装钉钉插件...");
         await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"rm -rf /root/.openclaw/extensions/dingtalk\"",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"rm -rf /root/.openclaw/extensions/dingtalk-connector\"",
             _ => { });
 
-        // 2. Install the plugin package (may fail internally due to npm peer conflicts, that's OK)
-        await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"openclaw plugins install @soimy/dingtalk\"",
+        // 2. Install the official plugin package
+        var exitCode = await WslService.RunCommandStreamAsync("wsl",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"openclaw plugins install @dingtalk-real-ai/dingtalk-connector\"",
             line => onLog(line));
 
-        // 3. Verify plugin directory was created
-        var dirExists = false;
-        await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"test -d /root/.openclaw/extensions/dingtalk && echo OK\"",
-            line => { if (line.Trim() == "OK") dirExists = true; });
-
-        if (!dirExists)
+        if (exitCode != 0)
         {
-            onLog("钉钉插件安装失败: 插件目录未创建");
+            onLog("钉钉插件安装失败");
             return false;
         }
 
-        // 4. Install npm dependencies ourselves with correct flags (skip devDeps to avoid peer conflicts)
-        onLog("正在安装插件依赖...");
-        var depExitCode = await WslService.RunCommandStreamAsync("wsl",
-            $"-d {WslService.DistroName} --user root -- bash -l -c \"cd /root/.openclaw/extensions/dingtalk && npm install --omit=dev --legacy-peer-deps 2>&1\"",
-            line => onLog(line));
-
-        if (depExitCode != 0)
-        {
-            onLog("插件依赖安装失败");
-            return false;
-        }
-
-        // 2. Enable plugins and add to allow list via node script
+        // 3. Enable plugins and add to allow list via node script
         var script = """
             const fs = require('fs');
             const CONFIG_PATH = '/root/.openclaw/openclaw.json';
@@ -449,8 +414,13 @@ public class OpenClawConfigService
             if (!cfg.plugins) cfg.plugins = {};
             cfg.plugins.enabled = true;
             if (!cfg.plugins.allow) cfg.plugins.allow = [];
-            if (!cfg.plugins.allow.includes('dingtalk'))
-                cfg.plugins.allow.push('dingtalk');
+            if (!cfg.plugins.allow.includes('dingtalk-connector'))
+                cfg.plugins.allow.push('dingtalk-connector');
+            if (!cfg.gateway) cfg.gateway = {};
+            if (!cfg.gateway.http) cfg.gateway.http = {};
+            if (!cfg.gateway.http.endpoints) cfg.gateway.http.endpoints = {};
+            if (!cfg.gateway.http.endpoints.chatCompletions) cfg.gateway.http.endpoints.chatCompletions = {};
+            cfg.gateway.http.endpoints.chatCompletions.enabled = true;
             fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
             console.log('OK');
             """;
@@ -469,5 +439,30 @@ public class OpenClawConfigService
             onLog("钉钉插件白名单配置失败");
 
         return ok;
+    }
+
+    /// <summary>Sync gateway.auth.token into channels.dingtalk-connector.gatewayToken (must run after Gateway restart)</summary>
+    public async Task SyncGatewayTokenToDingtalkAsync()
+    {
+        var script = """
+            const fs = require('fs');
+            const CONFIG_PATH = '/root/.openclaw/openclaw.json';
+            const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+            const token = cfg.gateway?.auth?.token || '';
+            if (token && cfg.channels?.['dingtalk-connector']) {
+                cfg.channels['dingtalk-connector'].gatewayToken = token;
+                fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+                console.log('OK');
+            } else {
+                console.log('SKIP');
+            }
+            """;
+
+        var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(script));
+        var wrapperCmd = $"echo {b64} | base64 -d | node -";
+
+        await WslService.RunCommandStreamAsync("wsl",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"{wrapperCmd}\"",
+            _ => { });
     }
 }
