@@ -396,7 +396,7 @@
                             <StackPanel MaxWidth="600">
                                 <TextBlock Text="渠道配置" FontSize="20" FontWeight="Bold"
                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
-                                <TextBlock Text="配置消息渠道（飞书）"
+                                <TextBlock Text="配置消息渠道（飞书、钉钉）"
                                            Style="{StaticResource FieldHint}" Margin="0,0,0,24"/>
 
                                 <!-- 飞书 (Feishu) -->
@@ -456,6 +456,129 @@
                                                            FontSize="12" Margin="0,6,0,0"/>
                                             </StackPanel>
                                         </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 钉钉 (DingTalk) -->
+                                <Border Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="20,16"
+                                        Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <!-- 标题行 -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                            <TextBlock Text="钉钉" FontSize="16" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <CheckBox x:Name="ChkDingtalkEnabled" Style="{StaticResource ToggleSwitch}"/>
+                                        </StackPanel>
+
+                                        <!-- 插件状态 -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                            <TextBlock x:Name="TxtDingtalkPluginStatus" Text="插件状态: 检测中..."
+                                                       FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                            <Button x:Name="BtnDingtalkInstallPlugin" Content="安装钉钉插件"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    Click="BtnDingtalkInstallPlugin_Click"
+                                                    Padding="12,4" FontSize="12" Visibility="Collapsed"/>
+                                        </StackPanel>
+
+                                        <!-- 配置区域（插件未安装时禁用） -->
+                                        <StackPanel x:Name="PanelDingtalkConfig" IsEnabled="False">
+
+                                        <!-- 基础字段 -->
+                                        <TextBlock Text="App Key (Client ID)" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox x:Name="TxtDingtalkClientId" Style="{StaticResource DarkTextBox}"
+                                                 Margin="0,0,0,12"/>
+
+                                        <TextBlock Text="App Secret (Client Secret)" Style="{StaticResource FieldLabel}"/>
+                                        <PasswordBox x:Name="PwdDingtalkClientSecret" Style="{StaticResource DarkPasswordBox}"
+                                                     Margin="0,0,0,12"/>
+
+                                        <!-- 高级设置折叠区 -->
+                                        <Button x:Name="BtnDingtalkAdvancedToggle" Content="▶ 高级设置"
+                                                Style="{StaticResource SecondaryButton}"
+                                                Click="BtnDingtalkAdvancedToggle_Click"
+                                                HorizontalAlignment="Left" Padding="12,4"
+                                                FontSize="12" Margin="0,0,0,8"/>
+
+                                        <StackPanel x:Name="PanelDingtalkAdvanced" Visibility="Collapsed">
+                                            <TextBlock Text="机器人代码 (Robot Code)" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="TxtDingtalkRobotCode" Style="{StaticResource DarkTextBox}"
+                                                     Margin="0,0,0,12"/>
+
+                                            <TextBlock Text="企业 ID (Corp ID)" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="TxtDingtalkCorpId" Style="{StaticResource DarkTextBox}"
+                                                     Margin="0,0,0,12"/>
+
+                                            <TextBlock Text="应用 ID (Agent ID)" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="TxtDingtalkAgentId" Style="{StaticResource DarkTextBox}"
+                                                     Margin="0,0,0,12"/>
+
+                                            <TextBlock Text="私聊策略 (DM Policy)" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="CboDingtalkDmPolicy" Style="{StaticResource DarkComboBoxReadOnly}"
+                                                      ItemContainerStyle="{StaticResource DarkComboBoxItem}"
+                                                      Margin="0,0,0,12">
+                                                <ComboBoxItem Content="open" IsSelected="True"/>
+                                                <ComboBoxItem Content="pairing"/>
+                                                <ComboBoxItem Content="allowlist"/>
+                                            </ComboBox>
+
+                                            <TextBlock Text="群聊策略 (Group Policy)" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="CboDingtalkGroupPolicy" Style="{StaticResource DarkComboBoxReadOnly}"
+                                                      ItemContainerStyle="{StaticResource DarkComboBoxItem}"
+                                                      Margin="0,0,0,12">
+                                                <ComboBoxItem Content="open" IsSelected="True"/>
+                                                <ComboBoxItem Content="allowlist"/>
+                                            </ComboBox>
+
+                                            <TextBlock Text="消息类型 (Message Type)" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="CboDingtalkMessageType" Style="{StaticResource DarkComboBoxReadOnly}"
+                                                      ItemContainerStyle="{StaticResource DarkComboBoxItem}"
+                                                      SelectionChanged="CboDingtalkMessageType_SelectionChanged"
+                                                      Margin="0,0,0,12">
+                                                <ComboBoxItem Content="markdown" IsSelected="True"/>
+                                                <ComboBoxItem Content="card"/>
+                                            </ComboBox>
+
+                                            <!-- 卡片配置（仅 card 模式显示） -->
+                                            <StackPanel x:Name="PanelDingtalkCard" Visibility="Collapsed">
+                                                <TextBlock Text="卡片模板 ID" Style="{StaticResource FieldLabel}"/>
+                                                <TextBox x:Name="TxtDingtalkCardTemplateId" Style="{StaticResource DarkTextBox}"
+                                                         Margin="0,0,0,12"/>
+                                                <TextBlock Text="卡片模板 Key" Style="{StaticResource FieldLabel}"/>
+                                                <TextBox x:Name="TxtDingtalkCardTemplateKey" Style="{StaticResource DarkTextBox}"
+                                                         Margin="0,0,0,12"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- 配对批准 -->
+                                        <Border BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="0,1,0,0" Margin="0,16,0,0" Padding="0,16,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="用户配对" FontSize="14" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                                                <TextBlock Text="当私聊策略为 pairing 时，用户首次与机器人对话会收到配对码，在此输入以批准访问"
+                                                           Style="{StaticResource FieldHint}" Margin="0,0,0,10"/>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox x:Name="TxtDingtalkPairingCode" Style="{StaticResource DarkTextBox}"
+                                                             VerticalContentAlignment="Center"/>
+                                                    <Button x:Name="BtnDingtalkPairingApprove" Grid.Column="1"
+                                                            Content="批准" Style="{StaticResource PrimaryButton}"
+                                                            Click="BtnDingtalkPairingApprove_Click"
+                                                            Padding="20,8" Margin="8,0,0,0"/>
+                                                </Grid>
+                                                <TextBlock x:Name="TxtDingtalkPairingStatus"
+                                                           FontSize="12" Margin="0,6,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        </StackPanel> <!-- /PanelDingtalkConfig -->
                                     </StackPanel>
                                 </Border>
 
