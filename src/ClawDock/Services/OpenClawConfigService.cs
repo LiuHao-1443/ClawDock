@@ -42,6 +42,8 @@ public class OpenClawFullConfig
     public ModelConfig Model { get; set; } = new();
     public List<ProviderConfig> Providers { get; set; } = new();
     public List<ChannelConfig> Channels { get; set; } = new();
+    /// <summary>Non-null if config parsing encountered an error (config may be partially loaded)</summary>
+    public string? ParseError { get; set; }
 }
 
 // ── Service ────────────────────────────────────────────────────────────────
@@ -51,9 +53,9 @@ public class OpenClawConfigService
     /// <summary>Read and parse the full openclaw.json config from WSL</summary>
     public async Task<OpenClawFullConfig> ReadFullConfigAsync()
     {
-        var output = await Task.Run(() =>
+        var output = await Task.Run(async () =>
         {
-            var p = Process.Start(new ProcessStartInfo
+            using var p = Process.Start(new ProcessStartInfo
             {
                 FileName = "wsl",
                 Arguments = $"-d {WslService.DistroName} --user root -- bash -l -c \"cat ~/.openclaw/openclaw.json\"",
@@ -66,23 +68,33 @@ public class OpenClawConfigService
             });
             if (p == null) return "";
 
-            string stdout = "";
-            var outTask = Task.Run(() => stdout = p.StandardOutput.ReadToEnd());
-            var errTask = Task.Run(() => p.StandardError.ReadToEnd());
+            // Read streams fully before waiting for exit to prevent pipe buffer deadlock
+            var outTask = p.StandardOutput.ReadToEndAsync();
+            var errTask = p.StandardError.ReadToEndAsync();
 
-            if (!p.WaitForExit(15_000))
+            using var cts = new CancellationTokenSource(15_000);
+            try
+            {
+                await p.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
             {
                 try { p.Kill(true); } catch { }
                 return "";
             }
-            outTask.Wait(5_000);
-            errTask.Wait(5_000);
+
+            var stdout = await outTask;
+            await errTask;
             return stdout;
         });
 
         var config = new OpenClawFullConfig();
         var jsonStart = output.IndexOf('{');
-        if (jsonStart < 0) return config;
+        if (jsonStart < 0)
+        {
+            config.ParseError = "Config file not found or empty output from WSL";
+            return config;
+        }
 
         try
         {
@@ -91,7 +103,10 @@ public class OpenClawConfigService
             config.Providers = ParseProviders(doc);
             config.Channels = ParseChannels(doc);
         }
-        catch { /* return empty config on parse failure */ }
+        catch (Exception ex)
+        {
+            config.ParseError = $"JSON parse error: {ex.Message}";
+        }
 
         return config;
     }
@@ -122,7 +137,7 @@ public class OpenClawConfigService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { Debug.WriteLine($"ParseModelConfig warning: {ex.Message}"); }
 
         return model;
     }
@@ -174,7 +189,7 @@ public class OpenClawConfigService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { Debug.WriteLine($"ParseProviders warning: {ex.Message}"); }
 
         return providers;
     }
@@ -215,7 +230,7 @@ public class OpenClawConfigService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { Debug.WriteLine($"ParseChannels warning: {ex.Message}"); }
 
         // Ensure all known channels exist (even if not in config)
         foreach (var name in knownChannels)
@@ -246,17 +261,42 @@ public class OpenClawConfigService
     }
 
     /// <summary>Set a single config key via openclaw config set (base64 pipe to avoid escaping)</summary>
+    /// <remarks>
+    /// The key is embedded directly in a shell command. It is validated against a whitelist regex
+    /// to prevent injection. The value is wrapped in shell single-quotes with proper escaping,
+    /// and the entire script is base64-encoded before passing to WSL, so shell-level injection
+    /// of the value is not possible.
+    /// </remarks>
     public async Task<bool> SetConfigAsync(string key, string value)
     {
+        // Validate key: only allow dotted identifiers (e.g. "models.providers.myProvider")
+        if (!System.Text.RegularExpressions.Regex.IsMatch(key, @"^[\w][\w\-]*(?:\.[\w][\w\-]*)*$"))
+            throw new ArgumentException($"Invalid config key: {key}");
+
+        // Null bytes would truncate the base64-decoded script; reject them early
+        if (value.Contains('\0'))
+            throw new ArgumentException("Value must not contain null bytes");
+
+        // The value is wrapped in POSIX single-quotes where only ' needs escaping via '\"'\"'.
+        // Shell metacharacters ($(...), `...`, etc.) are NOT interpreted inside single-quotes.
+        // The entire script is then base64-encoded, providing a second isolation layer.
         var script = $"openclaw config set {key} '{value.Replace("'", "'\"'\"'")}'";
         var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(script));
         var wrapperCmd = $"echo {b64} | base64 -d | bash -l";
 
+        var output = new StringBuilder();
         var exitCode = await WslService.RunCommandStreamAsync("wsl",
             $"-d {WslService.DistroName} --user root -- bash -c \"{wrapperCmd}\"",
-            _ => { });
+            line => output.AppendLine(line));
+        if (exitCode != 0)
+            LastError = $"openclaw config set failed (exit={exitCode}): {output.ToString().Trim()}";
+        else
+            LastError = null;
         return exitCode == 0;
     }
+
+    /// <summary>Last error message from a failed operation, for diagnostic logging</summary>
+    public string? LastError { get; private set; }
 
     /// <summary>Save model configuration</summary>
     public async Task<List<string>> SaveModelConfigAsync(ModelConfig config)
@@ -280,18 +320,25 @@ public class OpenClawConfigService
     /// <summary>Save provider as a whole object (openclaw validates all fields together)</summary>
     public async Task<List<string>> SaveProviderAsync(ProviderConfig provider)
     {
+        if (string.IsNullOrWhiteSpace(provider.Name))
+            throw new ArgumentException("Provider name cannot be empty");
+
         var failures = new List<string>();
         var key = $"models.providers.{provider.Name}";
 
-        // Build the provider object as JSON5 for openclaw config set
+        // Build the provider object as JSON5 for openclaw config set.
+        // Two layers of escaping are involved:
+        //   1. EscapeForJson5String: escapes values for JSON5 double-quoted strings (\\, \", \n, \r, \t)
+        //   2. SetConfigAsync: wraps the entire JSON5 object in shell single-quotes and handles
+        //      embedded single-quotes via the '\"'\"' pattern. The script is then base64-encoded,
+        //      so shell injection via the value is not possible.
         var modelsArray = new StringBuilder("[");
         for (int i = 0; i < provider.Models.Count; i++)
         {
             if (i > 0) modelsArray.Append(", ");
             var m = provider.Models[i];
-            var name = m.Name.Replace("\"", "\\\"");
-            var id = string.IsNullOrEmpty(m.Id) ? m.Name : m.Id;
-            id = id.Replace("\"", "\\\"");
+            var name = EscapeForJson5String(m.Name);
+            var id = EscapeForJson5String(string.IsNullOrEmpty(m.Id) ? m.Name : m.Id);
             var extras = new StringBuilder();
             if (m.ContextWindow.HasValue)
                 extras.Append($", contextWindow: {m.ContextWindow.Value}");
@@ -305,11 +352,11 @@ public class OpenClawConfigService
 
         var parts = new List<string>();
         if (!string.IsNullOrEmpty(provider.BaseUrl))
-            parts.Add($"baseUrl: \"{provider.BaseUrl.Replace("\"", "\\\"")}\"");
+            parts.Add($"baseUrl: \"{EscapeForJson5String(provider.BaseUrl)}\"");
         if (!string.IsNullOrEmpty(provider.ApiKey))
-            parts.Add($"apiKey: \"{provider.ApiKey.Replace("\"", "\\\"")}\"");
+            parts.Add($"apiKey: \"{EscapeForJson5String(provider.ApiKey)}\"");
         if (!string.IsNullOrEmpty(provider.Api))
-            parts.Add($"api: \"{provider.Api}\"");
+            parts.Add($"api: \"{EscapeForJson5String(provider.Api)}\"");
         parts.Add($"models: {modelsArray}");
 
         var obj = "{" + string.Join(", ", parts) + "}";
@@ -320,16 +367,45 @@ public class OpenClawConfigService
         return failures;
     }
 
+    /// <summary>Escape a string for safe embedding in a JSON5 double-quoted literal</summary>
+    private static string EscapeForJson5String(string value)
+        => value
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"")
+            .Replace("\n", "\\n")
+            .Replace("\r", "\\r")
+            .Replace("\t", "\\t")
+            .Replace("\0", "\\0")
+            .Replace("\u2028", "\\u2028")
+            .Replace("\u2029", "\\u2029");
+
+    /// <summary>Escape a string for safe embedding in a JS single-quoted literal</summary>
+    private static string EscapeForJsString(string value)
+        => value
+            .Replace("\\", "\\\\")
+            .Replace("'", "\\'")
+            .Replace("\n", "\\n")
+            .Replace("\r", "\\r")
+            .Replace("\0", "\\0")
+            .Replace("\u2028", "\\u2028")
+            .Replace("\u2029", "\\u2029");
+
     /// <summary>Delete a custom provider from openclaw.json</summary>
     public async Task<bool> DeleteProviderAsync(string providerName)
     {
+        if (string.IsNullOrWhiteSpace(providerName))
+            throw new ArgumentException("Provider name cannot be empty");
+
+        var safeName = EscapeForJsString(providerName);
         var script = $$"""
             const fs = require('fs');
             const CONFIG_PATH = '/root/.openclaw/openclaw.json';
             const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-            if (cfg.models?.providers?.['{{providerName}}']) {
-                delete cfg.models.providers['{{providerName}}'];
-                fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+            if (cfg.models?.providers?.['{{safeName}}']) {
+                delete cfg.models.providers['{{safeName}}'];
+                const tmp = CONFIG_PATH + '.tmp';
+                fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2));
+                fs.renameSync(tmp, CONFIG_PATH);
                 console.log('OK');
             } else {
                 console.log('NOT_FOUND');
@@ -339,17 +415,29 @@ public class OpenClawConfigService
         var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(script));
         var wrapperCmd = $"echo {b64} | base64 -d | node -";
 
-        var ok = false;
-        await WslService.RunCommandStreamAsync("wsl",
+        var deleted = false;
+        var output = new StringBuilder();
+        var exitCode = await WslService.RunCommandStreamAsync("wsl",
             $"-d {WslService.DistroName} --user root -- bash -l -c \"{wrapperCmd}\"",
-            line => { if (line.Trim() is "OK" or "NOT_FOUND") ok = true; });
-        return ok;
+            line => { output.AppendLine(line); if (line.Trim() == "OK") deleted = true; });
+        if (exitCode != 0)
+            LastError = $"DeleteProvider failed (exit={exitCode}): {output.ToString().Trim()}";
+        return deleted;
     }
 
     /// <summary>Save API key for a provider via auth-profiles.json + openclaw.json auth section</summary>
     public async Task<bool> SaveProviderApiKeyAsync(string providerName, string apiKey)
     {
-        var profileId = $"{providerName}:manual";
+        if (string.IsNullOrWhiteSpace(providerName))
+            throw new ArgumentException("Provider name cannot be empty");
+        if (string.IsNullOrEmpty(apiKey))
+            throw new ArgumentException("API key cannot be empty");
+        if (apiKey.Length > 8192)
+            throw new ArgumentException("API key exceeds maximum length");
+
+        var safeProvider = EscapeForJsString(providerName);
+        var safeProfileId = EscapeForJsString($"{providerName}:manual");
+        var safeToken = EscapeForJsString(apiKey);
 
         // 通过 node 脚本写入 auth-profiles.json 和 openclaw.json auth 配置
         // OpenClaw 使用独立的 auth store，而非 config 中的 apiKey 字段
@@ -357,9 +445,9 @@ public class OpenClawConfigService
             const fs = require('fs');
             const AGENT_DIR = '/root/.openclaw/agents/main/agent';
             const CONFIG_PATH = '/root/.openclaw/openclaw.json';
-            const provider = '{{providerName}}';
-            const profileId = '{{profileId}}';
-            const token = '{{apiKey}}';
+            const provider = '{{safeProvider}}';
+            const profileId = '{{safeProfileId}}';
+            const token = '{{safeToken}}';
 
             // 1. Update auth-profiles.json
             fs.mkdirSync(AGENT_DIR, { recursive: true });
@@ -367,7 +455,9 @@ public class OpenClawConfigService
             let store = { profiles: {} };
             try { store = JSON.parse(fs.readFileSync(authPath, 'utf8')); if (!store.profiles) store.profiles = {}; } catch {}
             store.profiles[profileId] = { type: 'token', provider, token };
-            fs.writeFileSync(authPath, JSON.stringify(store, null, 2));
+            const authTmp = authPath + '.tmp';
+            fs.writeFileSync(authTmp, JSON.stringify(store, null, 2));
+            fs.renameSync(authTmp, authPath);
             fs.chmodSync(authPath, 0o600);
 
             // 2. Update openclaw.json auth section
@@ -379,7 +469,9 @@ public class OpenClawConfigService
             if (!cfg.auth.order[provider]) cfg.auth.order[provider] = [];
             if (!cfg.auth.order[provider].includes(profileId))
                 cfg.auth.order[provider].unshift(profileId);
-            fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+            const cfgTmp = CONFIG_PATH + '.tmp';
+            fs.writeFileSync(cfgTmp, JSON.stringify(cfg, null, 2));
+            fs.renameSync(cfgTmp, CONFIG_PATH);
 
             console.log('OK');
             """;
@@ -463,7 +555,9 @@ public class OpenClawConfigService
             if (!cfg.gateway.http.endpoints) cfg.gateway.http.endpoints = {};
             if (!cfg.gateway.http.endpoints.chatCompletions) cfg.gateway.http.endpoints.chatCompletions = {};
             cfg.gateway.http.endpoints.chatCompletions.enabled = true;
-            fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+            const tmp = CONFIG_PATH + '.tmp';
+            fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2));
+            fs.renameSync(tmp, CONFIG_PATH);
             console.log('OK');
             """;
 
@@ -493,7 +587,9 @@ public class OpenClawConfigService
             const token = cfg.gateway?.auth?.token || '';
             if (token && cfg.channels?.['dingtalk-connector']) {
                 cfg.channels['dingtalk-connector'].gatewayToken = token;
-                fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+                const tmp = CONFIG_PATH + '.tmp';
+                fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2));
+                fs.renameSync(tmp, CONFIG_PATH);
                 console.log('OK');
             } else {
                 console.log('SKIP');

@@ -352,7 +352,7 @@
                                     <StackPanel>
                                         <TextBlock Text="Provider 名称" Style="{StaticResource FieldLabel}"/>
                                         <TextBox x:Name="TxtProviderName" Style="{StaticResource DarkTextBox}"
-                                                 Margin="0,0,0,12"/>
+                                                 MaxLength="64" Margin="0,0,0,12"/>
 
                                         <TextBlock Text="Base URL" Style="{StaticResource FieldLabel}"/>
                                         <TextBox x:Name="TxtProviderBaseUrl" Style="{StaticResource DarkTextBox}"
@@ -367,18 +367,18 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <PasswordBox x:Name="PwdProviderApiKey" Style="{StaticResource DarkPasswordBox}"/>
+                                            <TextBox x:Name="TxtProviderApiKeyVisible" Style="{StaticResource DarkTextBox}"
+                                                     Visibility="Collapsed"/>
                                             <Button x:Name="BtnToggleApiKey" Grid.Column="1"
                                                     Style="{StaticResource SecondaryButton}"
                                                     Content="显示" Click="BtnToggleApiKey_Click"
                                                     Padding="12,8" Margin="6,0,0,0" FontSize="12"/>
                                         </Grid>
-                                        <!-- Hidden TextBox for showing API key -->
-                                        <TextBox x:Name="TxtProviderApiKeyVisible" Style="{StaticResource DarkTextBox}"
-                                                 Visibility="Collapsed" Margin="0,-12,0,12"/>
 
                                         <TextBlock Text="API 类型" Style="{StaticResource FieldLabel}"/>
-                                        <ComboBox x:Name="CboProviderApi" Style="{StaticResource DarkComboBox}"
-                                                  IsReadOnly="True" Margin="0,0,0,4">
+                                        <ComboBox x:Name="CboProviderApi" Style="{StaticResource DarkComboBoxReadOnly}"
+                                                  ItemContainerStyle="{StaticResource DarkComboBoxItem}"
+                                                  Margin="0,0,0,4">
                                             <ComboBoxItem Content="OpenAI Responses（大多数 OpenAI 兼容服务）" Tag="openai-responses" Style="{StaticResource DarkComboBoxItem}" IsSelected="True"/>
                                             <ComboBoxItem Content="OpenAI Completions（旧版 OpenAI 兼容）" Tag="openai-completions" Style="{StaticResource DarkComboBoxItem}"/>
                                             <ComboBoxItem Content="Anthropic Messages（Anthropic 兼容）" Tag="anthropic-messages" Style="{StaticResource DarkComboBoxItem}"/>
