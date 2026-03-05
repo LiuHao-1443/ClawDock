@@ -30,6 +30,10 @@ public partial class InstallWindow : Window
         InitializeComponent();
         _stateService = stateService;
 
+        var version = typeof(InstallWindow).Assembly.GetName().Version;
+        if (version != null)
+            Title = $"ClawDock 安装向导 v{version.Major}.{version.Minor}.{version.Build}";
+
         // WSL2 重启后自动续装（唯一允许续装的场景）
         var state = stateService.Load();
         if (state.Phase == InstallPhase.Wsl2Reboot)

@@ -26,7 +26,7 @@ public partial class MainWindow : Window
         _gateway.LogReceived   += OnGatewayLogReceived;
 
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        _statusTimer.Tick += async (_, _) => await PollStatusAsync();
+        _statusTimer.Tick += (_, _) => _ = SafeFireAndForget(PollStatusAsync());
 
         // 启动时禁用所有按钮，等 WSL 就绪后再启用
         BtnStart.IsEnabled = false;
@@ -37,7 +37,14 @@ public partial class MainWindow : Window
         InitWebView();
 
         // 先等 WSL 就绪，再检测 Gateway 状态
-        _ = InitializeAndAutoStartAsync();
+        _ = SafeFireAndForget(InitializeAndAutoStartAsync());
+    }
+
+    /// <summary>Observe exceptions from fire-and-forget tasks to prevent unobserved task exceptions</summary>
+    private async Task SafeFireAndForget(Task task)
+    {
+        try { await task; }
+        catch (Exception ex) { OnGatewayLogReceived($"[错误] 后台任务异常: {ex.Message}"); }
     }
 
     // ── WebView2 初始化 ────────────────────────────────────────────────────
@@ -192,9 +199,9 @@ public partial class MainWindow : Window
         {
             _statusTimer.Start();
             ApplyStatus(GatewayStatus.Running);
-            _ = LoadOpenClawVersionAndCheckUpdateAsync();
-            _ = LoadModelNameAsync();
-            _ = EnsureDingtalkPluginInstalledAsync();
+            _ = SafeFireAndForget(LoadOpenClawVersionAndCheckUpdateAsync());
+            _ = SafeFireAndForget(LoadModelNameAsync());
+            _ = SafeFireAndForget(EnsureDingtalkPluginInstalledAsync());
             return;
         }
 
@@ -228,9 +235,9 @@ public partial class MainWindow : Window
             if (ready)
             {
                 ApplyStatus(GatewayStatus.Stopped);
-                _ = LoadOpenClawVersionAndCheckUpdateAsync();
-                _ = LoadModelNameAsync();
-                _ = EnsureDingtalkPluginInstalledAsync();
+                _ = SafeFireAndForget(LoadOpenClawVersionAndCheckUpdateAsync());
+                _ = SafeFireAndForget(LoadModelNameAsync());
+                _ = SafeFireAndForget(EnsureDingtalkPluginInstalledAsync());
             }
             else
             {
@@ -314,7 +321,7 @@ public partial class MainWindow : Window
     private async Task LoadOpenClawVersionAndCheckUpdateAsync()
     {
         await LoadOpenClawVersionAsync();
-        _ = CheckForUpdateAsync();
+        _ = SafeFireAndForget(CheckForUpdateAsync());
     }
 
     private void ShowInitializing()
@@ -335,10 +342,10 @@ public partial class MainWindow : Window
         => _gateway.Start();
 
     private void BtnStop_Click(object sender, RoutedEventArgs e)
-        => _gateway.StopAsync();
+        => _ = SafeFireAndForget(_gateway.StopAsync());
 
-    private async void BtnRestart_Click(object sender, RoutedEventArgs e)
-        => await _gateway.RestartAsync();
+    private void BtnRestart_Click(object sender, RoutedEventArgs e)
+        => _ = SafeFireAndForget(_gateway.RestartAsync());
 
     private void BtnOpenBrowser_Click(object sender, RoutedEventArgs e)
         => Process.Start(new ProcessStartInfo(_gateway.DashboardUrl) { UseShellExecute = true });
@@ -349,37 +356,46 @@ public partial class MainWindow : Window
         var prevStatusText = StatusText.Text;
         StatusText.Text = "更新中...";
 
-        // 记住 Gateway 是否在运行，更新前需要停止
-        var wasRunning = _lastStatus == GatewayStatus.Running;
-        if (wasRunning)
+        try
         {
-            OnGatewayLogReceived("停止 Gateway 以进行更新...");
-            await _gateway.StopAsync();
-            // 等 Gateway 完全停止
-            for (int i = 0; i < 30 && await _gateway.IsRunningAsync(); i++)
-                await Task.Delay(500);
-        }
-
-        var openClawService = new OpenClawService();
-        var success = await Task.Run(async () =>
-            await openClawService.UpdateAsync(line => OnGatewayLogReceived(line)));
-
-        if (success)
-        {
-            // 重新加载版本号
-            await LoadOpenClawVersionAsync();
-            BtnUpdate.Visibility = Visibility.Collapsed;
-            StatusText.Text = "更新完成";
-
-            // 如果之前在运行，自动重启
+            // 记住 Gateway 是否在运行，更新前需要停止
+            var wasRunning = _lastStatus == GatewayStatus.Running;
             if (wasRunning)
             {
-                OnGatewayLogReceived("重新启动 Gateway...");
-                _gateway.Start();
+                OnGatewayLogReceived("停止 Gateway 以进行更新...");
+                await _gateway.StopAsync();
+                // 等 Gateway 完全停止
+                for (int i = 0; i < 30 && await _gateway.IsRunningAsync(); i++)
+                    await Task.Delay(500);
+            }
+
+            var openClawService = new OpenClawService();
+            var success = await Task.Run(async () =>
+                await openClawService.UpdateAsync(line => OnGatewayLogReceived(line)));
+
+            if (success)
+            {
+                // 重新加载版本号
+                await LoadOpenClawVersionAsync();
+                BtnUpdate.Visibility = Visibility.Collapsed;
+                StatusText.Text = "更新完成";
+
+                // 如果之前在运行，自动重启
+                if (wasRunning)
+                {
+                    OnGatewayLogReceived("重新启动 Gateway...");
+                    _gateway.Start();
+                }
+            }
+            else
+            {
+                StatusText.Text = "更新失败";
+                BtnUpdate.IsEnabled = true;
             }
         }
-        else
+        catch (Exception ex)
         {
+            OnGatewayLogReceived($"更新异常: {ex.Message}");
             StatusText.Text = "更新失败";
             BtnUpdate.IsEnabled = true;
         }
@@ -700,10 +716,12 @@ public partial class MainWindow : Window
     private bool _settingsVisible;
     private bool _apiKeyVisible;
     private bool _providerKeyVisible;
+    private bool _isSaving;
     private string _activeSettingsTab = "models";
     private Dictionary<string, List<string>> _modelsByProvider = new();
     private Dictionary<string, string> _providerApiKeys = new();
     private List<ProviderConfig> _customProviders = new();
+    private string? _editingProviderName; // tracks original name when editing a provider
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -727,7 +745,7 @@ public partial class MainWindow : Window
         ApplySettingsTab();
 
         if (!_settingsLoaded)
-            _ = LoadSettingsAsync();
+            _ = SafeFireAndForget(LoadSettingsAsync());
     }
 
     private void CloseSettings()
@@ -823,11 +841,16 @@ public partial class MainWindow : Window
 
         try
         {
+            OnGatewayLogReceived("[设置] 正在加载配置...");
             var configTask = _configService.ReadFullConfigAsync();
             var modelsTask = _configService.ListAvailableModelsAsync();
             await Task.WhenAll(configTask, modelsTask);
             var config = configTask.Result;
             var availableModels = modelsTask.Result;
+
+            if (config.ParseError != null)
+                OnGatewayLogReceived($"[设置] 配置解析警告: {config.ParseError}");
+            OnGatewayLogReceived($"[设置] 配置加载完成: {config.Providers.Count} 个 Provider, {availableModels.Count} 个可用模型");
 
             Dispatcher.Invoke(() =>
             {
@@ -902,8 +925,18 @@ public partial class MainWindow : Window
                 // Provider list
                 _customProviders = config.Providers;
                 RebuildCustomProviderList();
-                if (config.Providers.Count > 0)
-                    LoadProviderIntoForm(config.Providers[0]);
+                // Restore editing context if the provider still exists, otherwise load first
+                var restoreProvider = _editingProviderName != null
+                    ? config.Providers.FirstOrDefault(p => p.Name == _editingProviderName)
+                    : null;
+                if (restoreProvider != null)
+                    LoadProviderIntoForm(restoreProvider);
+                else
+                {
+                    _editingProviderName = null;
+                    if (config.Providers.Count > 0)
+                        LoadProviderIntoForm(config.Providers[0]);
+                }
 
                 // Channels
                 foreach (var ch in config.Channels)
@@ -945,11 +978,12 @@ public partial class MainWindow : Window
                 ApplySettingsTab();
 
                 // Check DingTalk plugin status asynchronously
-                _ = CheckDingtalkPluginStatusAsync();
+                _ = SafeFireAndForget(CheckDingtalkPluginStatusAsync());
             });
         }
         catch (Exception ex)
         {
+            OnGatewayLogReceived($"[设置] 配置加载失败: {ex.Message}");
             Dispatcher.Invoke(() =>
             {
                 SettingsLoading.Visibility = Visibility.Collapsed;
@@ -1089,8 +1123,7 @@ public partial class MainWindow : Window
 
         var cboReasoning = new System.Windows.Controls.ComboBox
         {
-            Style = (Style)FindResource("DarkComboBox"),
-            IsReadOnly = true,
+            Style = (Style)FindResource("DarkComboBoxReadOnly"),
             Tag = "reasoning"
         };
         var reasoningItems = new[]
@@ -1119,7 +1152,7 @@ public partial class MainWindow : Window
         advancedPanel.Children.Add(cboReasoning);
 
         // Toggle button
-        var hasAdvanced = contextWindow.HasValue || maxTokens.HasValue || (reasoning.HasValue && reasoning.Value);
+        var hasAdvanced = contextWindow.HasValue || maxTokens.HasValue || reasoning.HasValue;
         if (hasAdvanced) advancedPanel.Visibility = Visibility.Visible;
 
         var btnAdvanced = new WpfButton
@@ -1155,25 +1188,35 @@ public partial class MainWindow : Window
     }
 
     private static void CollectModelFields(System.Windows.Controls.Panel parent,
-        ref string? mName, ref string? mId, ref int? mContextWindow, ref int? mMaxTokens, ref bool? mReasoning)
+        ref string? mName, ref string? mId, ref int? mContextWindow, ref int? mMaxTokens, ref bool? mReasoning,
+        List<string>? validationErrors = null)
     {
         foreach (var child in parent.Children)
         {
             if (child is System.Windows.Controls.Panel nested)
             {
-                CollectModelFields(nested, ref mName, ref mId, ref mContextWindow, ref mMaxTokens, ref mReasoning);
+                CollectModelFields(nested, ref mName, ref mId, ref mContextWindow, ref mMaxTokens, ref mReasoning, validationErrors);
             }
             else if (child is WpfTextBox tb)
             {
+                var text = tb.Text?.Trim();
                 switch (tb.Tag?.ToString())
                 {
-                    case "name": mName = tb.Text?.Trim(); break;
-                    case "id": mId = tb.Text?.Trim(); break;
+                    case "name": mName = text; break;
+                    case "id": mId = text; break;
                     case "contextWindow":
-                        if (int.TryParse(tb.Text?.Trim(), out var cw)) mContextWindow = cw;
+                        if (!string.IsNullOrEmpty(text))
+                        {
+                            if (int.TryParse(text, out var cw) && cw > 0 && cw <= 10_000_000) mContextWindow = cw;
+                            else validationErrors?.Add($"Context Window 值无效（需为 1~10000000 的整数）: {text}");
+                        }
                         break;
                     case "maxTokens":
-                        if (int.TryParse(tb.Text?.Trim(), out var mt)) mMaxTokens = mt;
+                        if (!string.IsNullOrEmpty(text))
+                        {
+                            if (int.TryParse(text, out var mt) && mt > 0 && mt <= 10_000_000) mMaxTokens = mt;
+                            else validationErrors?.Add($"Max Tokens 值无效（需为 1~10000000 的整数）: {text}");
+                        }
                         break;
                 }
             }
@@ -1234,10 +1277,17 @@ public partial class MainWindow : Window
 
     private void LoadProviderIntoForm(ProviderConfig p)
     {
+        _editingProviderName = p.Name;
         TxtProviderName.Text = p.Name;
         TxtProviderBaseUrl.Text = p.BaseUrl;
         PwdProviderApiKey.Password = p.ApiKey;
         TxtProviderApiKeyVisible.Text = p.ApiKey;
+
+        // Reset API key visibility to hidden state
+        _apiKeyVisible = false;
+        PwdProviderApiKey.Visibility = Visibility.Visible;
+        TxtProviderApiKeyVisible.Visibility = Visibility.Collapsed;
+        BtnToggleApiKey.Content = "显示";
 
         foreach (ComboBoxItem item in CboProviderApi.Items)
         {
@@ -1255,18 +1305,29 @@ public partial class MainWindow : Window
 
     private void ClearProviderForm()
     {
+        _editingProviderName = null;
         TxtProviderName.Text = "";
         TxtProviderBaseUrl.Text = "";
         PwdProviderApiKey.Password = "";
         TxtProviderApiKeyVisible.Text = "";
         CboProviderApi.SelectedIndex = 0;
         ProviderModelsList.Children.Clear();
+
+        // Reset API key visibility to hidden state
+        _apiKeyVisible = false;
+        PwdProviderApiKey.Visibility = Visibility.Visible;
+        TxtProviderApiKeyVisible.Visibility = Visibility.Collapsed;
+        BtnToggleApiKey.Content = "显示";
     }
 
     private void RebuildCustomProviderList()
     {
         CustomProviderList.Children.Clear();
         if (_customProviders.Count == 0) return;
+
+        var textPrimaryBrush = (SolidColorBrush)FindResource("TextPrimaryBrush");
+        var secondaryButtonStyle = (Style)FindResource("SecondaryButton");
+        var errorBrush = (SolidColorBrush)FindResource("ErrorBrush");
 
         foreach (var p in _customProviders)
         {
@@ -1278,7 +1339,7 @@ public partial class MainWindow : Window
             var lbl = new TextBlock
             {
                 Text = $"{p.Name}（{p.Models.Count} 个模型）",
-                Foreground = (SolidColorBrush)FindResource("TextPrimaryBrush"),
+                Foreground = textPrimaryBrush,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontSize = 13
             };
@@ -1290,10 +1351,11 @@ public partial class MainWindow : Window
             var btnEdit = new WpfButton
             {
                 Content = "编辑",
-                Style = (Style)FindResource("SecondaryButton"),
+                Style = secondaryButtonStyle,
                 Padding = new Thickness(12, 4, 12, 4),
                 Margin = new Thickness(6, 0, 0, 0),
-                FontSize = 11
+                FontSize = 11,
+                IsEnabled = !_isSaving
             };
             btnEdit.Click += (_, _) => LoadProviderIntoForm(providerRef);
             Grid.SetColumn(btnEdit, 1);
@@ -1302,13 +1364,22 @@ public partial class MainWindow : Window
             var btnDel = new WpfButton
             {
                 Content = "删除",
-                Style = (Style)FindResource("SecondaryButton"),
+                Style = secondaryButtonStyle,
                 Padding = new Thickness(12, 4, 12, 4),
                 Margin = new Thickness(4, 0, 0, 0),
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B))
+                Foreground = errorBrush,
+                IsEnabled = !_isSaving
             };
-            btnDel.Click += async (_, _) => await DeleteCustomProviderAsync(providerRef.Name);
+            btnDel.Click += async (_, _) =>
+            {
+                try { await DeleteCustomProviderAsync(providerRef.Name); }
+                catch (Exception ex)
+                {
+                    TxtModelSaveStatus.Foreground = errorBrush;
+                    TxtModelSaveStatus.Text = $"删除失败: {ex.Message}";
+                }
+            };
             Grid.SetColumn(btnDel, 2);
             row.Children.Add(btnDel);
 
@@ -1318,30 +1389,42 @@ public partial class MainWindow : Window
 
     private async Task DeleteCustomProviderAsync(string providerName)
     {
+        if (_isSaving) return;
+
         var result = System.Windows.MessageBox.Show(
             $"确定要删除自定义 Provider「{providerName}」吗？",
             "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (result != MessageBoxResult.Yes) return;
 
-        OnGatewayLogReceived($"[设置] 删除自定义 Provider: {providerName}");
-        var ok = await _configService.DeleteProviderAsync(providerName);
-        if (ok)
+        _isSaving = true;
+        RebuildCustomProviderList();
+        try
         {
-            OnGatewayLogReceived($"[设置] Provider「{providerName}」已删除");
-            _customProviders.RemoveAll(p => p.Name == providerName);
-            _modelsByProvider.Remove(providerName);
-            _providerApiKeys.Remove(providerName);
-            CboProvider.Items.Remove(providerName);
-            RebuildCustomProviderList();
+            OnGatewayLogReceived($"[设置] 删除自定义 Provider: {providerName}");
+            var ok = await _configService.DeleteProviderAsync(providerName);
+            if (ok)
+            {
+                OnGatewayLogReceived($"[设置] Provider「{providerName}」已删除");
+                _customProviders.RemoveAll(p => p.Name == providerName);
+                _modelsByProvider.Remove(providerName);
+                _providerApiKeys.Remove(providerName);
+                CboProvider.Items.Remove(providerName);
 
-            // Clear form if it was showing the deleted provider
-            if (TxtProviderName.Text?.Trim() == providerName)
-                ClearProviderForm();
+                // Clear form if it was showing the deleted provider
+                if (_editingProviderName == providerName)
+                    ClearProviderForm();
+            }
+            else
+            {
+                OnGatewayLogReceived($"[设置] 删除 Provider「{providerName}」失败");
+                TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+                TxtModelSaveStatus.Text = $"删除 {providerName} 失败";
+            }
         }
-        else
+        finally
         {
-            TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
-            TxtModelSaveStatus.Text = $"删除 {providerName} 失败";
+            _isSaving = false;
+            RebuildCustomProviderList();
         }
     }
 
@@ -1351,16 +1434,67 @@ public partial class MainWindow : Window
 
     private async void BtnSaveModels_Click(object sender, RoutedEventArgs e)
     {
+        if (_isSaving) return;
+        _isSaving = true;
         BtnSaveModels.IsEnabled = false;
+        RebuildCustomProviderList();
         TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("TextSecondaryBrush");
         TxtModelSaveStatus.Text = "保存中...";
 
         try
         {
+            // ── Pre-validate all inputs before any save operations ──
+            var providerName = TxtProviderName.Text?.Trim();
+            if (!string.IsNullOrEmpty(providerName))
+            {
+                if (!System.Text.RegularExpressions.Regex.IsMatch(providerName, @"^[\w\-\u4e00-\u9fff]+$"))
+                {
+                    OnGatewayLogReceived($"[设置] 验证失败: Provider 名称「{providerName}」格式无效");
+                    TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+                    TxtModelSaveStatus.Text = "Provider 名称只能包含字母、数字、下划线、连字符和中文";
+                    BtnSaveModels.IsEnabled = true;
+                    _isSaving = false;
+                    RebuildCustomProviderList();
+                    return;
+                }
+
+                var preValidationErrors = new List<string>();
+                foreach (var child in ProviderModelsList.Children)
+                {
+                    if (child is StackPanel wrapper)
+                    {
+                        string? pn = null, pi = null;
+                        int? pcw = null, pmt = null;
+                        bool? pr = null;
+                        CollectModelFields(wrapper, ref pn, ref pi, ref pcw, ref pmt, ref pr, preValidationErrors);
+                    }
+                }
+                if (preValidationErrors.Count > 0)
+                {
+                    OnGatewayLogReceived($"[设置] 验证失败: {string.Join("; ", preValidationErrors)}");
+                    TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+                    TxtModelSaveStatus.Text = string.Join("; ", preValidationErrors);
+                    BtnSaveModels.IsEnabled = true;
+                    _isSaving = false;
+                    RebuildCustomProviderList();
+                    return;
+                }
+            }
+
+            // ── Capture all UI values before any await to avoid stale reads ──
             var selectedProvider = CboProvider.SelectedItem?.ToString() ?? "";
             var modelName = CboPrimaryModel.Text?.Trim() ?? "";
-            var fullModel = !string.IsNullOrEmpty(selectedProvider) && !string.IsNullOrEmpty(modelName) && !modelName.Contains("/")
+            var fullModel = !string.IsNullOrEmpty(selectedProvider) && !string.IsNullOrEmpty(modelName)
+                && !modelName.StartsWith(selectedProvider + "/")
                 ? $"{selectedProvider}/{modelName}" : modelName;
+            var providerKeyValue = _providerKeyVisible
+                ? TxtSelectedProviderKey.Text?.Trim() ?? ""
+                : PwdSelectedProviderKey.Password ?? "";
+            var providerApiKeyValue = _apiKeyVisible
+                ? TxtProviderApiKeyVisible.Text?.Trim() ?? ""
+                : PwdProviderApiKey.Password ?? "";
+            var providerBaseUrl = TxtProviderBaseUrl.Text?.Trim() ?? "";
+            var providerApi = (CboProviderApi.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "openai-responses";
 
             var modelConfig = new ModelConfig
             {
@@ -1382,41 +1516,41 @@ public partial class MainWindow : Window
 
             OnGatewayLogReceived($"[设置] 保存模型配置: primary={fullModel}, fallbacks=[{string.Join(", ", modelConfig.FallbackModels)}]");
             var failures = await _configService.SaveModelConfigAsync(modelConfig);
-
-            // Save API key for selected provider
-            var providerKeyValue = _providerKeyVisible
-                ? TxtSelectedProviderKey.Text?.Trim() ?? ""
-                : PwdSelectedProviderKey.Password ?? "";
             if (!string.IsNullOrEmpty(selectedProvider) && !string.IsNullOrEmpty(providerKeyValue))
             {
+                OnGatewayLogReceived($"[设置] 保存 {selectedProvider} 的 API Key...");
                 try
                 {
                     if (!await _configService.SaveProviderApiKeyAsync(selectedProvider, providerKeyValue))
+                    {
+                        OnGatewayLogReceived($"[设置] {selectedProvider} API Key 保存失败");
                         failures.Add($"models.providers.{selectedProvider}.apiKey");
+                    }
                     else
+                    {
+                        OnGatewayLogReceived($"[设置] {selectedProvider} API Key 保存成功");
                         _providerApiKeys[selectedProvider] = providerKeyValue;
+                    }
                 }
                 catch (Exception ex2)
                 {
+                    OnGatewayLogReceived($"[设置] {selectedProvider} API Key 保存异常: {ex2.Message}");
                     failures.Add($"[EX] {ex2.Message}");
                 }
             }
 
             // Save custom provider if name is specified
-            var providerName = TxtProviderName.Text?.Trim();
             if (!string.IsNullOrEmpty(providerName))
             {
                 var provider = new ProviderConfig
                 {
                     Name = providerName,
-                    BaseUrl = TxtProviderBaseUrl.Text?.Trim() ?? "",
-                    ApiKey = _apiKeyVisible
-                        ? TxtProviderApiKeyVisible.Text?.Trim() ?? ""
-                        : PwdProviderApiKey.Password ?? "",
-                    Api = (CboProviderApi.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "openai-responses"
+                    BaseUrl = providerBaseUrl,
+                    ApiKey = providerApiKeyValue,
+                    Api = providerApi
                 };
 
-                // Collect provider models (each wrapper StackPanel has two Grid rows)
+                // Collect provider models (already validated in pre-validation above)
                 foreach (var child in ProviderModelsList.Children)
                 {
                     if (child is StackPanel wrapper)
@@ -1454,12 +1588,31 @@ public partial class MainWindow : Window
                 // Update custom provider list and dropdown
                 if (pf.Count == 0)
                 {
-                    if (provider.Models.Count > 0)
+                    // If provider was renamed, delete old one from config and local state
+                    if (_editingProviderName != null && _editingProviderName != providerName)
                     {
-                        _modelsByProvider[providerName] = provider.Models.Select(m => m.Name).ToList();
-                        if (!CboProvider.Items.Contains(providerName))
-                            CboProvider.Items.Add(providerName);
+                        OnGatewayLogReceived($"[设置] Provider 重命名: {_editingProviderName} → {providerName}，删除旧配置");
+                        var deleteOk = await _configService.DeleteProviderAsync(_editingProviderName);
+                        if (deleteOk)
+                        {
+                            _customProviders.RemoveAll(cp => cp.Name == _editingProviderName);
+                            _modelsByProvider.Remove(_editingProviderName);
+                            _providerApiKeys.Remove(_editingProviderName);
+                            CboProvider.Items.Remove(_editingProviderName);
+                        }
+                        else
+                        {
+                            OnGatewayLogReceived($"[设置] 警告: 旧 Provider「{_editingProviderName}」删除失败，可能存在残留配置");
+                            failures.Add($"delete:{_editingProviderName}");
+                        }
                     }
+
+                    _modelsByProvider[providerName] = provider.Models.Select(m => m.Name).ToList();
+                    if (!CboProvider.Items.Contains(providerName))
+                        CboProvider.Items.Add(providerName);
+
+                    if (!string.IsNullOrEmpty(provider.ApiKey))
+                        _providerApiKeys[providerName] = provider.ApiKey;
 
                     // Update _customProviders list
                     var existing = _customProviders.FindIndex(cp => cp.Name == providerName);
@@ -1468,6 +1621,7 @@ public partial class MainWindow : Window
                     else
                         _customProviders.Add(provider);
                     RebuildCustomProviderList();
+                    _editingProviderName = providerName;
                 }
             }
 
@@ -1480,9 +1634,14 @@ public partial class MainWindow : Window
             }
             else
             {
+                var renameFailures = failures.Where(f => f.StartsWith("delete:")).ToList();
+                var otherFailures = failures.Where(f => !f.StartsWith("delete:")).ToList();
                 OnGatewayLogReceived($"[设置] 模型配置保存失败: {string.Join(", ", failures)}");
                 TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
-                TxtModelSaveStatus.Text = $"部分保存失败: {string.Join(", ", failures)}";
+                if (renameFailures.Count > 0 && otherFailures.Count == 0)
+                    TxtModelSaveStatus.Text = $"保存成功，但旧 Provider 删除失败，请手动删除: {string.Join(", ", renameFailures.Select(f => f[7..]))}";
+                else
+                    TxtModelSaveStatus.Text = $"部分保存失败: {string.Join(", ", failures)}";
             }
         }
         catch (Exception ex)
@@ -1493,6 +1652,8 @@ public partial class MainWindow : Window
         finally
         {
             BtnSaveModels.IsEnabled = true;
+            _isSaving = false;
+            RebuildCustomProviderList();
         }
     }
 
@@ -1500,12 +1661,17 @@ public partial class MainWindow : Window
 
     private async void BtnSaveChannels_Click(object sender, RoutedEventArgs e)
     {
+        if (_isSaving) return;
+        _isSaving = true;
         BtnSaveChannels.IsEnabled = false;
+        BtnSaveModels.IsEnabled = false;
+        RebuildCustomProviderList();
         TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("TextSecondaryBrush");
         TxtChannelSaveStatus.Text = "保存中...";
 
         try
         {
+            OnGatewayLogReceived("[设置] 保存渠道配置...");
             var allFailures = new List<string>();
 
             // Feishu
@@ -1534,6 +1700,7 @@ public partial class MainWindow : Window
 
             if (allFailures.Count == 0)
             {
+                OnGatewayLogReceived("[设置] 渠道配置保存成功");
                 // Gateway 可能因配置变更而退出，自动重启
                 if (_lastStatus == GatewayStatus.Running || await _gateway.IsRunningAsync())
                 {
@@ -1546,22 +1713,26 @@ public partial class MainWindow : Window
                     TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
                     TxtChannelSaveStatus.Text = "保存成功";
                 }
-
             }
             else
             {
+                OnGatewayLogReceived($"[设置] 渠道配置保存失败: {string.Join(", ", allFailures)}");
                 TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
                 TxtChannelSaveStatus.Text = $"部分保存失败: {string.Join(", ", allFailures)}";
             }
         }
         catch (Exception ex)
         {
+            OnGatewayLogReceived($"[设置] 渠道配置保存异常: {ex.Message}");
             TxtChannelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
             TxtChannelSaveStatus.Text = $"保存失败: {ex.Message}";
         }
         finally
         {
             BtnSaveChannels.IsEnabled = true;
+            BtnSaveModels.IsEnabled = true;
+            _isSaving = false;
+            RebuildCustomProviderList();
         }
     }
 }
