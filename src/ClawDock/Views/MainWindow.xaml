@@ -342,6 +342,9 @@
                                 <TextBlock Text="配置自定义模型提供商（如 OpenAI 兼容 API）"
                                            Style="{StaticResource FieldHint}" Margin="0,0,0,12"/>
 
+                                <!-- 已有自定义 Provider 列表 -->
+                                <StackPanel x:Name="CustomProviderList" Margin="0,0,0,8"/>
+
                                 <Border Background="{StaticResource SurfaceBrush}"
                                         BorderBrush="{StaticResource BorderBrush}"
                                         BorderThickness="1" CornerRadius="8" Padding="20,16"
@@ -375,15 +378,18 @@
 
                                         <TextBlock Text="API 类型" Style="{StaticResource FieldLabel}"/>
                                         <ComboBox x:Name="CboProviderApi" Style="{StaticResource DarkComboBox}"
-                                                  IsEditable="False" Margin="0,0,0,12">
-                                            <ComboBoxItem Content="openai" Style="{StaticResource DarkComboBoxItem}" IsSelected="True"/>
-                                            <ComboBoxItem Content="anthropic" Style="{StaticResource DarkComboBoxItem}"/>
-                                            <ComboBoxItem Content="google" Style="{StaticResource DarkComboBoxItem}"/>
+                                                  IsReadOnly="True" Margin="0,0,0,4">
+                                            <ComboBoxItem Content="OpenAI Responses（大多数 OpenAI 兼容服务）" Tag="openai-responses" Style="{StaticResource DarkComboBoxItem}" IsSelected="True"/>
+                                            <ComboBoxItem Content="OpenAI Completions（旧版 OpenAI 兼容）" Tag="openai-completions" Style="{StaticResource DarkComboBoxItem}"/>
+                                            <ComboBoxItem Content="Anthropic Messages（Anthropic 兼容）" Tag="anthropic-messages" Style="{StaticResource DarkComboBoxItem}"/>
+                                            <ComboBoxItem Content="Google Generative AI（Gemini 兼容）" Tag="google-generative-ai" Style="{StaticResource DarkComboBoxItem}"/>
                                         </ComboBox>
+                                        <TextBlock Text="阿里云百炼、Ollama、vLLM 等请选 OpenAI Responses；Kimi 等 Anthropic 兼容服务选 Anthropic Messages"
+                                                   Style="{StaticResource FieldHint}" TextWrapping="Wrap" Margin="0,0,0,12"/>
 
                                         <TextBlock Text="模型列表" Style="{StaticResource FieldLabel}"/>
-                                        <TextBlock Text="每个模型需要 Name（显示名）和 ID（API 模型标识）"
-                                                   Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
+                                        <TextBlock Text="每个模型需要 Name（显示名）和 ID（API 模型标识），可选填 Context Window、Max Tokens 和 Reasoning"
+                                                   Style="{StaticResource FieldHint}" TextWrapping="Wrap" Margin="0,0,0,8"/>
                                         <StackPanel x:Name="ProviderModelsList"/>
                                         <Button x:Name="BtnAddProviderModel" Content="+ 添加模型"
                                                 Style="{StaticResource SecondaryButton}"
@@ -393,12 +399,16 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- 保存按钮 + 状态 -->
+                                <!-- 保存按钮 + 新建 + 状态 -->
                                 <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
                                     <Button x:Name="BtnSaveModels" Content="保存模型配置"
                                             Style="{StaticResource PrimaryButton}"
                                             Click="BtnSaveModels_Click"
                                             Padding="24,10"/>
+                                    <Button Content="新建 Provider"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Click="BtnNewProvider_Click"
+                                            Padding="16,10" Margin="8,0,0,0"/>
                                     <TextBlock x:Name="TxtModelSaveStatus"
                                                VerticalAlignment="Center" Margin="16,0,0,0"
                                                FontSize="13"/>

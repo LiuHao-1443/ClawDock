@@ -703,6 +703,7 @@ public partial class MainWindow : Window
     private string _activeSettingsTab = "models";
     private Dictionary<string, List<string>> _modelsByProvider = new();
     private Dictionary<string, string> _providerApiKeys = new();
+    private List<ProviderConfig> _customProviders = new();
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -836,25 +837,32 @@ public partial class MainWindow : Window
                 {
                     var slash = m.IndexOf('/');
                     if (slash <= 0) continue;
-                    var provider = m[..slash];
+                    var provider = m[..slash].Trim();
+                    if (string.IsNullOrWhiteSpace(provider)) continue;
                     if (!_modelsByProvider.ContainsKey(provider))
                         _modelsByProvider[provider] = new List<string>();
                     _modelsByProvider[provider].Add(m[(slash + 1)..]);
                 }
 
-                // Cache provider API keys from config
+                // Merge custom providers from config into modelsByProvider
                 _providerApiKeys.Clear();
                 foreach (var p in config.Providers)
                 {
                     if (!string.IsNullOrEmpty(p.ApiKey))
                         _providerApiKeys[p.Name] = p.ApiKey;
+
+                    if (!string.IsNullOrEmpty(p.Name) && p.Models.Count > 0 && !_modelsByProvider.ContainsKey(p.Name))
+                        _modelsByProvider[p.Name] = p.Models.Select(m => m.Name).ToList();
                 }
 
                 // Populate provider dropdown
                 CboProvider.SelectionChanged -= CboProvider_SelectionChanged;
                 CboProvider.Items.Clear();
                 foreach (var p in _modelsByProvider.Keys.OrderBy(p => p))
-                    CboProvider.Items.Add(p);
+                {
+                    if (!string.IsNullOrWhiteSpace(p))
+                        CboProvider.Items.Add(p);
+                }
 
                 // Pre-select provider from current model
                 var currentModel = config.Model.PrimaryModel;
@@ -891,30 +899,11 @@ public partial class MainWindow : Window
                 foreach (var fb in config.Model.FallbackModels)
                     AddFallbackModelRow(fb);
 
-                // Provider (load first one if exists)
+                // Provider list
+                _customProviders = config.Providers;
+                RebuildCustomProviderList();
                 if (config.Providers.Count > 0)
-                {
-                    var p = config.Providers[0];
-                    TxtProviderName.Text = p.Name;
-                    TxtProviderBaseUrl.Text = p.BaseUrl;
-                    PwdProviderApiKey.Password = p.ApiKey;
-                    TxtProviderApiKeyVisible.Text = p.ApiKey;
-
-                    // Select API type
-                    foreach (ComboBoxItem item in CboProviderApi.Items)
-                    {
-                        if (item.Content?.ToString() == p.Api)
-                        {
-                            CboProviderApi.SelectedItem = item;
-                            break;
-                        }
-                    }
-
-                    // Provider models
-                    ProviderModelsList.Children.Clear();
-                    foreach (var m in p.Models)
-                        AddProviderModelRow(m.Name, m.Id);
-                }
+                    LoadProviderIntoForm(config.Providers[0]);
 
                 // Channels
                 foreach (var ch in config.Channels)
@@ -1017,32 +1006,41 @@ public partial class MainWindow : Window
 
     // ── 动态列表：Provider 模型 ─────────────────────────────────────────────
 
-    private void AddProviderModelRow(string name = "", string id = "")
+    private void AddProviderModelRow(string name = "", string id = "",
+        int? contextWindow = null, int? maxTokens = null, bool? reasoning = null)
     {
-        var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var fieldLabelStyle = (Style)FindResource("FieldLabel");
+        var darkTextBoxStyle = (Style)FindResource("DarkTextBox");
 
-        var tbName = new WpfTextBox
-        {
-            Text = name,
-            Style = (Style)FindResource("DarkTextBox"),
-            Tag = "name"
-        };
-        tbName.SetValue(System.Windows.Controls.Primitives.TextBoxBase.TabIndexProperty, 0);
+        var wrapper = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+
+        // ── Labels row 1: Name / ID ──
+        var lblRow1 = new Grid();
+        lblRow1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        lblRow1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        lblRow1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var lblName = new TextBlock { Text = "Name（显示名）", Style = fieldLabelStyle, Margin = new Thickness(0, 0, 0, 4) };
+        Grid.SetColumn(lblName, 0);
+        lblRow1.Children.Add(lblName);
+
+        var lblId = new TextBlock { Text = "ID（模型标识）", Style = fieldLabelStyle, Margin = new Thickness(6, 0, 0, 4) };
+        Grid.SetColumn(lblId, 1);
+        lblRow1.Children.Add(lblId);
+
+        // ── Inputs row 1: Name + ID + ✕ ──
+        var inputRow1 = new Grid();
+        inputRow1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        inputRow1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        inputRow1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var tbName = new WpfTextBox { Text = name, Style = darkTextBoxStyle, Tag = "name" };
         Grid.SetColumn(tbName, 0);
-        row.Children.Add(tbName);
+        inputRow1.Children.Add(tbName);
 
-        var tbId = new WpfTextBox
-        {
-            Text = id,
-            Style = (Style)FindResource("DarkTextBox"),
-            Margin = new Thickness(6, 0, 0, 0),
-            Tag = "id"
-        };
+        var tbId = new WpfTextBox { Text = id, Style = darkTextBoxStyle, Margin = new Thickness(6, 0, 0, 0), Tag = "id" };
         Grid.SetColumn(tbId, 1);
-        row.Children.Add(tbId);
+        inputRow1.Children.Add(tbId);
 
         var btn = new WpfButton
         {
@@ -1052,11 +1050,140 @@ public partial class MainWindow : Window
             Margin = new Thickness(6, 0, 0, 0),
             FontSize = 12
         };
-        btn.Click += (_, _) => ProviderModelsList.Children.Remove(row);
+        btn.Click += (_, _) => ProviderModelsList.Children.Remove(wrapper);
         Grid.SetColumn(btn, 2);
-        row.Children.Add(btn);
+        inputRow1.Children.Add(btn);
 
-        ProviderModelsList.Children.Add(row);
+        // ── Advanced panel (collapsed by default) ──
+        var advancedPanel = new StackPanel { Visibility = Visibility.Collapsed };
+
+        // Labels row 2: Context Window / Max Tokens
+        var lblRow2 = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        lblRow2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        lblRow2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        lblRow2.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var lblCw = new TextBlock { Text = "Context Window", Style = fieldLabelStyle, Margin = new Thickness(0, 0, 0, 4) };
+        Grid.SetColumn(lblCw, 0);
+        lblRow2.Children.Add(lblCw);
+
+        var lblMt = new TextBlock { Text = "Max Tokens", Style = fieldLabelStyle, Margin = new Thickness(6, 0, 0, 4) };
+        Grid.SetColumn(lblMt, 1);
+        lblRow2.Children.Add(lblMt);
+
+        // Inputs row 2: Context Window + Max Tokens
+        var inputRow2 = new Grid();
+        inputRow2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        inputRow2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var tbContextWindow = new WpfTextBox { Text = contextWindow?.ToString() ?? "", Style = darkTextBoxStyle, Tag = "contextWindow" };
+        Grid.SetColumn(tbContextWindow, 0);
+        inputRow2.Children.Add(tbContextWindow);
+
+        var tbMaxTokens = new WpfTextBox { Text = maxTokens?.ToString() ?? "", Style = darkTextBoxStyle, Margin = new Thickness(6, 0, 0, 0), Tag = "maxTokens" };
+        Grid.SetColumn(tbMaxTokens, 1);
+        inputRow2.Children.Add(tbMaxTokens);
+
+        // Row 3: Reasoning label + ComboBox
+        var lblReasoning = new TextBlock { Text = "思考模式（Reasoning）", Style = fieldLabelStyle, Margin = new Thickness(0, 8, 0, 4) };
+
+        var cboReasoning = new System.Windows.Controls.ComboBox
+        {
+            Style = (Style)FindResource("DarkComboBox"),
+            IsReadOnly = true,
+            Tag = "reasoning"
+        };
+        var reasoningItems = new[]
+        {
+            ("不设置（使用默认）", ""),
+            ("开启", "true"),
+            ("关闭", "false")
+        };
+        foreach (var (label, value) in reasoningItems)
+        {
+            var item = new ComboBoxItem
+            {
+                Content = label,
+                Tag = value,
+                Style = (Style)FindResource("DarkComboBoxItem")
+            };
+            cboReasoning.Items.Add(item);
+        }
+        // Select based on current value
+        var selectedIdx = reasoning switch { true => 1, false => 2, _ => 0 };
+        cboReasoning.SelectedIndex = selectedIdx;
+
+        advancedPanel.Children.Add(lblRow2);
+        advancedPanel.Children.Add(inputRow2);
+        advancedPanel.Children.Add(lblReasoning);
+        advancedPanel.Children.Add(cboReasoning);
+
+        // Toggle button
+        var hasAdvanced = contextWindow.HasValue || maxTokens.HasValue || (reasoning.HasValue && reasoning.Value);
+        if (hasAdvanced) advancedPanel.Visibility = Visibility.Visible;
+
+        var btnAdvanced = new WpfButton
+        {
+            Content = hasAdvanced ? "▾ 收起高级选项" : "▸ 高级选项",
+            Style = (Style)FindResource("SecondaryButton"),
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 4, 0, 0),
+            FontSize = 11,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            BorderThickness = new Thickness(0),
+            Background = System.Windows.Media.Brushes.Transparent
+        };
+        btnAdvanced.Click += (_, _) =>
+        {
+            if (advancedPanel.Visibility == Visibility.Collapsed)
+            {
+                advancedPanel.Visibility = Visibility.Visible;
+                btnAdvanced.Content = "▾ 收起高级选项";
+            }
+            else
+            {
+                advancedPanel.Visibility = Visibility.Collapsed;
+                btnAdvanced.Content = "▸ 高级选项";
+            }
+        };
+
+        wrapper.Children.Add(lblRow1);
+        wrapper.Children.Add(inputRow1);
+        wrapper.Children.Add(btnAdvanced);
+        wrapper.Children.Add(advancedPanel);
+        ProviderModelsList.Children.Add(wrapper);
+    }
+
+    private static void CollectModelFields(System.Windows.Controls.Panel parent,
+        ref string? mName, ref string? mId, ref int? mContextWindow, ref int? mMaxTokens, ref bool? mReasoning)
+    {
+        foreach (var child in parent.Children)
+        {
+            if (child is System.Windows.Controls.Panel nested)
+            {
+                CollectModelFields(nested, ref mName, ref mId, ref mContextWindow, ref mMaxTokens, ref mReasoning);
+            }
+            else if (child is WpfTextBox tb)
+            {
+                switch (tb.Tag?.ToString())
+                {
+                    case "name": mName = tb.Text?.Trim(); break;
+                    case "id": mId = tb.Text?.Trim(); break;
+                    case "contextWindow":
+                        if (int.TryParse(tb.Text?.Trim(), out var cw)) mContextWindow = cw;
+                        break;
+                    case "maxTokens":
+                        if (int.TryParse(tb.Text?.Trim(), out var mt)) mMaxTokens = mt;
+                        break;
+                }
+            }
+            else if (child is System.Windows.Controls.ComboBox cbo && cbo.Tag?.ToString() == "reasoning")
+            {
+                var val = (cbo.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+                if (val == "true") mReasoning = true;
+                else if (val == "false") mReasoning = false;
+            }
+        }
     }
 
     private void BtnAddProviderModel_Click(object sender, RoutedEventArgs e) => AddProviderModelRow();
@@ -1103,6 +1230,123 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── 自定义 Provider 列表 ────────────────────────────────────────────────
+
+    private void LoadProviderIntoForm(ProviderConfig p)
+    {
+        TxtProviderName.Text = p.Name;
+        TxtProviderBaseUrl.Text = p.BaseUrl;
+        PwdProviderApiKey.Password = p.ApiKey;
+        TxtProviderApiKeyVisible.Text = p.ApiKey;
+
+        foreach (ComboBoxItem item in CboProviderApi.Items)
+        {
+            if (item.Tag?.ToString() == p.Api)
+            {
+                CboProviderApi.SelectedItem = item;
+                break;
+            }
+        }
+
+        ProviderModelsList.Children.Clear();
+        foreach (var m in p.Models)
+            AddProviderModelRow(m.Name, m.Id, m.ContextWindow, m.MaxTokens, m.Reasoning);
+    }
+
+    private void ClearProviderForm()
+    {
+        TxtProviderName.Text = "";
+        TxtProviderBaseUrl.Text = "";
+        PwdProviderApiKey.Password = "";
+        TxtProviderApiKeyVisible.Text = "";
+        CboProviderApi.SelectedIndex = 0;
+        ProviderModelsList.Children.Clear();
+    }
+
+    private void RebuildCustomProviderList()
+    {
+        CustomProviderList.Children.Clear();
+        if (_customProviders.Count == 0) return;
+
+        foreach (var p in _customProviders)
+        {
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var lbl = new TextBlock
+            {
+                Text = $"{p.Name}（{p.Models.Count} 个模型）",
+                Foreground = (SolidColorBrush)FindResource("TextPrimaryBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 13
+            };
+            Grid.SetColumn(lbl, 0);
+            row.Children.Add(lbl);
+
+            var providerRef = p;
+
+            var btnEdit = new WpfButton
+            {
+                Content = "编辑",
+                Style = (Style)FindResource("SecondaryButton"),
+                Padding = new Thickness(12, 4, 12, 4),
+                Margin = new Thickness(6, 0, 0, 0),
+                FontSize = 11
+            };
+            btnEdit.Click += (_, _) => LoadProviderIntoForm(providerRef);
+            Grid.SetColumn(btnEdit, 1);
+            row.Children.Add(btnEdit);
+
+            var btnDel = new WpfButton
+            {
+                Content = "删除",
+                Style = (Style)FindResource("SecondaryButton"),
+                Padding = new Thickness(12, 4, 12, 4),
+                Margin = new Thickness(4, 0, 0, 0),
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B))
+            };
+            btnDel.Click += async (_, _) => await DeleteCustomProviderAsync(providerRef.Name);
+            Grid.SetColumn(btnDel, 2);
+            row.Children.Add(btnDel);
+
+            CustomProviderList.Children.Add(row);
+        }
+    }
+
+    private async Task DeleteCustomProviderAsync(string providerName)
+    {
+        var result = System.Windows.MessageBox.Show(
+            $"确定要删除自定义 Provider「{providerName}」吗？",
+            "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        OnGatewayLogReceived($"[设置] 删除自定义 Provider: {providerName}");
+        var ok = await _configService.DeleteProviderAsync(providerName);
+        if (ok)
+        {
+            OnGatewayLogReceived($"[设置] Provider「{providerName}」已删除");
+            _customProviders.RemoveAll(p => p.Name == providerName);
+            _modelsByProvider.Remove(providerName);
+            _providerApiKeys.Remove(providerName);
+            CboProvider.Items.Remove(providerName);
+            RebuildCustomProviderList();
+
+            // Clear form if it was showing the deleted provider
+            if (TxtProviderName.Text?.Trim() == providerName)
+                ClearProviderForm();
+        }
+        else
+        {
+            TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
+            TxtModelSaveStatus.Text = $"删除 {providerName} 失败";
+        }
+    }
+
+    private void BtnNewProvider_Click(object sender, RoutedEventArgs e) => ClearProviderForm();
+
     // ── 保存模型配置 ────────────────────────────────────────────────────────
 
     private async void BtnSaveModels_Click(object sender, RoutedEventArgs e)
@@ -1136,6 +1380,7 @@ public partial class MainWindow : Window
                 }
             }
 
+            OnGatewayLogReceived($"[设置] 保存模型配置: primary={fullModel}, fallbacks=[{string.Join(", ", modelConfig.FallbackModels)}]");
             var failures = await _configService.SaveModelConfigAsync(modelConfig);
 
             // Save API key for selected provider
@@ -1168,40 +1413,74 @@ public partial class MainWindow : Window
                     ApiKey = _apiKeyVisible
                         ? TxtProviderApiKeyVisible.Text?.Trim() ?? ""
                         : PwdProviderApiKey.Password ?? "",
-                    Api = (CboProviderApi.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "openai"
+                    Api = (CboProviderApi.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "openai-responses"
                 };
 
-                // Collect provider models (each row has Name + ID textboxes)
+                // Collect provider models (each wrapper StackPanel has two Grid rows)
                 foreach (var child in ProviderModelsList.Children)
                 {
-                    if (child is Grid row)
+                    if (child is StackPanel wrapper)
                     {
                         string? mName = null, mId = null;
-                        foreach (var c in row.Children)
-                        {
-                            if (c is WpfTextBox tb)
-                            {
-                                if (tb.Tag?.ToString() == "name") mName = tb.Text?.Trim();
-                                else if (tb.Tag?.ToString() == "id") mId = tb.Text?.Trim();
-                            }
-                        }
+                        int? mContextWindow = null, mMaxTokens = null;
+                        bool? mReasoning = null;
+
+                        CollectModelFields(wrapper, ref mName, ref mId, ref mContextWindow, ref mMaxTokens, ref mReasoning);
+
                         if (!string.IsNullOrWhiteSpace(mName))
-                            provider.Models.Add(new ProviderModel { Name = mName!, Id = mId ?? mName! });
+                            provider.Models.Add(new ProviderModel
+                            {
+                                Name = mName!,
+                                Id = mId ?? mName!,
+                                ContextWindow = mContextWindow,
+                                MaxTokens = mMaxTokens,
+                                Reasoning = mReasoning
+                            });
                     }
                 }
 
+                var modelDetails = string.Join(", ", provider.Models.Select(m =>
+                {
+                    var parts = new List<string> { $"name={m.Name}", $"id={m.Id}" };
+                    if (m.ContextWindow.HasValue) parts.Add($"contextWindow={m.ContextWindow}");
+                    if (m.MaxTokens.HasValue) parts.Add($"maxTokens={m.MaxTokens}");
+                    if (m.Reasoning.HasValue) parts.Add($"reasoning={m.Reasoning}");
+                    return "{" + string.Join(", ", parts) + "}";
+                }));
+                OnGatewayLogReceived($"[设置] 保存自定义 Provider: {providerName}, baseUrl={provider.BaseUrl}, api={provider.Api}, models=[{modelDetails}]");
                 var pf = await _configService.SaveProviderAsync(provider);
                 failures.AddRange(pf);
+
+                // Update custom provider list and dropdown
+                if (pf.Count == 0)
+                {
+                    if (provider.Models.Count > 0)
+                    {
+                        _modelsByProvider[providerName] = provider.Models.Select(m => m.Name).ToList();
+                        if (!CboProvider.Items.Contains(providerName))
+                            CboProvider.Items.Add(providerName);
+                    }
+
+                    // Update _customProviders list
+                    var existing = _customProviders.FindIndex(cp => cp.Name == providerName);
+                    if (existing >= 0)
+                        _customProviders[existing] = provider;
+                    else
+                        _customProviders.Add(provider);
+                    RebuildCustomProviderList();
+                }
             }
 
             if (failures.Count == 0)
             {
+                OnGatewayLogReceived("[设置] 模型配置保存成功");
                 TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("SuccessBrush");
                 TxtModelSaveStatus.Text = "保存成功";
                 ModelText.Text = string.IsNullOrEmpty(fullModel) ? "" : $"· {fullModel}";
             }
             else
             {
+                OnGatewayLogReceived($"[设置] 模型配置保存失败: {string.Join(", ", failures)}");
                 TxtModelSaveStatus.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
                 TxtModelSaveStatus.Text = $"部分保存失败: {string.Join(", ", failures)}";
             }

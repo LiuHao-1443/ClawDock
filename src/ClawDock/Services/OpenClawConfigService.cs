@@ -16,6 +16,9 @@ public class ProviderModel
 {
     public string Name { get; set; } = "";
     public string Id { get; set; } = "";
+    public int? ContextWindow { get; set; }
+    public int? MaxTokens { get; set; }
+    public bool? Reasoning { get; set; }
 }
 
 public class ProviderConfig
@@ -156,6 +159,12 @@ public class OpenClawConfigService
                                 pm.Name = name.GetString() ?? "";
                             if (m.TryGetProperty("id", out var id))
                                 pm.Id = id.GetString() ?? "";
+                            if (m.TryGetProperty("contextWindow", out var cw) && cw.ValueKind == JsonValueKind.Number)
+                                pm.ContextWindow = cw.GetInt32();
+                            if (m.TryGetProperty("maxTokens", out var mt) && mt.ValueKind == JsonValueKind.Number)
+                                pm.MaxTokens = mt.GetInt32();
+                            if (m.TryGetProperty("reasoning", out var rs) && (rs.ValueKind == JsonValueKind.True || rs.ValueKind == JsonValueKind.False))
+                                pm.Reasoning = rs.GetBoolean();
                             if (!string.IsNullOrEmpty(pm.Name) || !string.IsNullOrEmpty(pm.Id))
                                 p.Models.Add(pm);
                         }
@@ -283,7 +292,14 @@ public class OpenClawConfigService
             var name = m.Name.Replace("\"", "\\\"");
             var id = string.IsNullOrEmpty(m.Id) ? m.Name : m.Id;
             id = id.Replace("\"", "\\\"");
-            modelsArray.Append($"{{name: \"{name}\", id: \"{id}\"}}");
+            var extras = new StringBuilder();
+            if (m.ContextWindow.HasValue)
+                extras.Append($", contextWindow: {m.ContextWindow.Value}");
+            if (m.MaxTokens.HasValue)
+                extras.Append($", maxTokens: {m.MaxTokens.Value}");
+            if (m.Reasoning.HasValue)
+                extras.Append($", reasoning: {(m.Reasoning.Value ? "true" : "false")}");
+            modelsArray.Append($"{{name: \"{name}\", id: \"{id}\"{extras}}}");
         }
         modelsArray.Append(']');
 
@@ -302,6 +318,32 @@ public class OpenClawConfigService
             failures.Add(key);
 
         return failures;
+    }
+
+    /// <summary>Delete a custom provider from openclaw.json</summary>
+    public async Task<bool> DeleteProviderAsync(string providerName)
+    {
+        var script = $$"""
+            const fs = require('fs');
+            const CONFIG_PATH = '/root/.openclaw/openclaw.json';
+            const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+            if (cfg.models?.providers?.['{{providerName}}']) {
+                delete cfg.models.providers['{{providerName}}'];
+                fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+                console.log('OK');
+            } else {
+                console.log('NOT_FOUND');
+            }
+            """;
+
+        var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(script));
+        var wrapperCmd = $"echo {b64} | base64 -d | node -";
+
+        var ok = false;
+        await WslService.RunCommandStreamAsync("wsl",
+            $"-d {WslService.DistroName} --user root -- bash -l -c \"{wrapperCmd}\"",
+            line => { if (line.Trim() is "OK" or "NOT_FOUND") ok = true; });
+        return ok;
     }
 
     /// <summary>Save API key for a provider via auth-profiles.json + openclaw.json auth section</summary>
