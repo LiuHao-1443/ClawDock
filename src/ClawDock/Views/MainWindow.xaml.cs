@@ -192,7 +192,7 @@ public partial class MainWindow : Window
         {
             _statusTimer.Start();
             ApplyStatus(GatewayStatus.Running);
-            _ = LoadOpenClawVersionAsync();
+            _ = LoadOpenClawVersionAndCheckUpdateAsync();
             _ = LoadModelNameAsync();
             _ = EnsureDingtalkPluginInstalledAsync();
             return;
@@ -228,7 +228,7 @@ public partial class MainWindow : Window
             if (ready)
             {
                 ApplyStatus(GatewayStatus.Stopped);
-                _ = LoadOpenClawVersionAsync();
+                _ = LoadOpenClawVersionAndCheckUpdateAsync();
                 _ = LoadModelNameAsync();
                 _ = EnsureDingtalkPluginInstalledAsync();
             }
@@ -258,6 +258,8 @@ public partial class MainWindow : Window
         catch { }
     }
 
+    private string? _installedVersion;
+
     private async Task LoadOpenClawVersionAsync()
     {
         try
@@ -271,9 +273,48 @@ public partial class MainWindow : Window
             });
 
             if (!string.IsNullOrEmpty(version))
+            {
+                _installedVersion = version;
                 Dispatcher.Invoke(() => VersionText.Text = $"OpenClaw v{version}");
+            }
         }
         catch { }
+    }
+
+    private string? _latestVersion;
+
+    private async Task CheckForUpdateAsync()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_installedVersion)) return;
+
+            var openClawService = new OpenClawService();
+            _latestVersion = await openClawService.GetLatestVersionAsync();
+            if (string.IsNullOrEmpty(_latestVersion)) return;
+
+            // 比较版本号（去掉可能的 v 前缀）
+            var installed = _installedVersion.TrimStart('v');
+            var latest = _latestVersion.TrimStart('v');
+
+            if (Version.TryParse(installed, out var cur) &&
+                Version.TryParse(latest, out var remote) &&
+                remote > cur)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    BtnUpdate.Visibility = Visibility.Visible;
+                    BtnUpdate.ToolTip = $"v{installed} → v{latest}";
+                });
+            }
+        }
+        catch { }
+    }
+
+    private async Task LoadOpenClawVersionAndCheckUpdateAsync()
+    {
+        await LoadOpenClawVersionAsync();
+        _ = CheckForUpdateAsync();
     }
 
     private void ShowInitializing()
@@ -301,6 +342,48 @@ public partial class MainWindow : Window
 
     private void BtnOpenBrowser_Click(object sender, RoutedEventArgs e)
         => Process.Start(new ProcessStartInfo(_gateway.DashboardUrl) { UseShellExecute = true });
+
+    private async void BtnUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        BtnUpdate.IsEnabled = false;
+        var prevStatusText = StatusText.Text;
+        StatusText.Text = "更新中...";
+
+        // 记住 Gateway 是否在运行，更新前需要停止
+        var wasRunning = _lastStatus == GatewayStatus.Running;
+        if (wasRunning)
+        {
+            OnGatewayLogReceived("停止 Gateway 以进行更新...");
+            await _gateway.StopAsync();
+            // 等 Gateway 完全停止
+            for (int i = 0; i < 30 && await _gateway.IsRunningAsync(); i++)
+                await Task.Delay(500);
+        }
+
+        var openClawService = new OpenClawService();
+        var success = await Task.Run(async () =>
+            await openClawService.UpdateAsync(line => OnGatewayLogReceived(line)));
+
+        if (success)
+        {
+            // 重新加载版本号
+            await LoadOpenClawVersionAsync();
+            BtnUpdate.Visibility = Visibility.Collapsed;
+            StatusText.Text = "更新完成";
+
+            // 如果之前在运行，自动重启
+            if (wasRunning)
+            {
+                OnGatewayLogReceived("重新启动 Gateway...");
+                _gateway.Start();
+            }
+        }
+        else
+        {
+            StatusText.Text = "更新失败";
+            BtnUpdate.IsEnabled = true;
+        }
+    }
 
     private void BtnUninstall_Click(object sender, RoutedEventArgs e)
         => OpenUninstallWindow();
