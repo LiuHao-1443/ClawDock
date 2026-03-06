@@ -131,24 +131,21 @@ public class WslService
 
         // Step 1: 确保 WSL2 内核 + Virtual Machine Platform 已启用
         // 始终运行（幂等），因为 wsl --status 可能成功但 VM Platform 未启用
+        // 使用可见控制台窗口运行，让用户看到 WSL 原生下载进度条
         onLog("▶ 启用 WSL2 功能...");
+        onLog("  （请在弹出的命令行窗口中查看下载进度）");
 
-        var installOutput = new StringBuilder();
-        var installExitCode = await RunCommandStreamAsync("wsl", "--install --no-distribution",
-            line => { installOutput.AppendLine(line); onLog("  " + line); }, ct, Encoding.Unicode);
+        var installExitCode = await RunCommandWithConsoleAsync("wsl", "--install --no-distribution", ct);
+        onLog($"  WSL2 安装命令完成 (exit={installExitCode})");
 
         onPhase?.Invoke(InstallPhase.Wsl2Enabled);
 
-        // wsl --install 输出包含重启提示时，立即要求重启，避免后续 import 误导用户
+        // 无法从控制台输出判断是否需要重启，改为检测系统状态
         if (!IsDistroInstalled() && installExitCode != 0)
         {
-            var installOut = installOutput.ToString();
-            if (IsRebootRequired(installOut))
-            {
-                onLog("");
-                onLog("⚠ WSL2 功能已启用，需要重启计算机以激活");
-                return false;
-            }
+            onLog("");
+            onLog("⚠ WSL2 功能已启用，需要重启计算机以激活");
+            return false;
         }
 
         // Step 2: 从内嵌资源导入 Ubuntu rootfs 为 ClawDock 发行版
@@ -429,14 +426,23 @@ public class WslService
     }
 
     /// <summary>
-    /// 判断 wsl --install 输出是否提示需要重启
+    /// 在可见的控制台窗口中运行命令（不重定向输出），
+    /// 用于 wsl --install 等需要展示原生进度条的场景。
     /// </summary>
-    private static bool IsRebootRequired(string output)
+    public static async Task<int> RunCommandWithConsoleAsync(
+        string exe, string args, CancellationToken ct = default)
     {
-        return output.Contains("请重新启动", StringComparison.OrdinalIgnoreCase) ||
-               output.Contains("重启", StringComparison.OrdinalIgnoreCase) ||
-               output.Contains("restart", StringComparison.OrdinalIgnoreCase) ||
-               output.Contains("reboot", StringComparison.OrdinalIgnoreCase);
+        using var p = new Process();
+        p.StartInfo = new ProcessStartInfo
+        {
+            FileName = exe,
+            Arguments = args,
+            UseShellExecute = false,
+            CreateNoWindow = false, // 显示控制台窗口，让用户看到原生进度
+        };
+        p.Start();
+        await p.WaitForExitAsync(ct);
+        return p.ExitCode;
     }
 
     /// <summary>

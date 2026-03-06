@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media;
 using ClawDock.Services;
@@ -248,6 +249,9 @@ public partial class InstallWindow : Window
         InitInstallLog();
         BtnNext.IsEnabled = false;
         WslLogText.Text = "";
+        WslProgressBar.Value = 0;
+        WslPercentText.Text = "0%";
+        WslStepText.Text = "准备中...";
 
         WriteLog("── WSL2 安装 ──");
         var progress = new Progress<string>(line =>
@@ -255,6 +259,7 @@ public partial class InstallWindow : Window
             WslLogText.Text += line + "\n";
             WslLogScroll.ScrollToBottom();
             WriteLog(line);
+            UpdateWslProgress(line);
         });
 
         try
@@ -268,6 +273,7 @@ public partial class InstallWindow : Window
 
             if (_needsReboot)
             {
+                WslStepText.Text = "需要重启计算机";
                 WriteLog("WSL2 安装完成，需要重启");
                 WslRebootBanner.Visibility = Visibility.Visible;
                 _stateService.SavePhase(InstallPhase.Wsl2Reboot);
@@ -277,6 +283,9 @@ public partial class InstallWindow : Window
             }
             else
             {
+                WslProgressBar.Value = 100;
+                WslPercentText.Text = "100%";
+                WslStepText.Text = "安装完成";
                 WriteLog("WSL2 安装完成，无需重启");
                 _stateService.MarkWsl2Done();
                 ClearResumeOnReboot(); // WSL 阶段已过，立即清除自启动项，避免 OpenClaw 失败后每次开机弹窗
@@ -287,12 +296,122 @@ public partial class InstallWindow : Window
         }
         catch (Exception ex)
         {
+            WslProgressBar.Value = 0;
+            WslPercentText.Text = "0%";
+            WslStepText.Text = "安装失败";
             WriteLog($"❌ WSL2 安装异常: {ex}");
             ((IProgress<string>)progress).Report($"\n❌ 错误: {ex.Message}");
             ((IProgress<string>)progress).Report($"详细日志: {_logFilePath}");
             BtnNext.IsEnabled = true;
             BtnNext.Content = "重试";
         }
+    }
+
+    // ── WSL 进度解析 ─────────────────────────────────────────────────────
+
+    private void UpdateWslProgress(string line)
+    {
+        int value = -1;
+        string? stepText = null;
+
+        if (line.Contains("正在检查系统状态"))
+        {
+            value = 2;
+            stepText = "检查系统状态...";
+        }
+        else if (line.Contains("已安装，跳过"))
+        {
+            value = 100;
+            stepText = "已安装";
+        }
+        else if (line.Contains("▶ 启用 WSL2 功能"))
+        {
+            value = 5;
+            stepText = "启用 WSL2 功能...";
+        }
+        else if (line.Contains("✓ WSL2 功能已就绪"))
+        {
+            value = 15;
+            stepText = "WSL2 就绪";
+        }
+        else if (line.Contains("▶ 正在从内置镜像导入"))
+        {
+            value = 15;
+            stepText = "解压内置镜像...";
+        }
+        else if (line.Contains("解压中..."))
+        {
+            // "解压中... X.X MB / Y.Y MB (Z%)" → map 0-100% to 15-35%
+            var match = Regex.Match(line, @"\((\d+)%\)");
+            if (match.Success && int.TryParse(match.Groups[1].Value, out int pct))
+                value = 15 + pct * 20 / 100;
+            stepText = "解压内置镜像...";
+        }
+        else if (line.Contains("✓ 解压完成"))
+        {
+            value = 35;
+            stepText = "导入发行版...";
+        }
+        else if (line.Contains("✓ 导入完成"))
+        {
+            value = 65;
+            stepText = "导入完成";
+        }
+        else if (line.Contains("内核版本过旧"))
+        {
+            stepText = "更新 WSL 内核...";
+        }
+        else if (line.Contains("▶ 配置 apt 国内镜像"))
+        {
+            value = 70;
+            stepText = "配置 APT 镜像...";
+        }
+        else if (line.Contains("✓ 镜像配置完成"))
+        {
+            value = 75;
+        }
+        else if (line.Contains("▶ 配置 wsl.conf"))
+        {
+            value = 78;
+            stepText = "配置 wsl.conf...";
+        }
+        else if (line.Contains("✓ wsl.conf 配置完成"))
+        {
+            value = 80;
+        }
+        else if (line.Contains("正在重启发行版"))
+        {
+            value = 82;
+            stepText = "重启发行版...";
+        }
+        else if (line.Contains("等待发行版就绪"))
+        {
+            // "等待发行版就绪... (N/15)" → map 1-15 to 82-95%
+            var match = Regex.Match(line, @"\((\d+)/(\d+)\)");
+            if (match.Success && int.TryParse(match.Groups[1].Value, out int cur)
+                              && int.TryParse(match.Groups[2].Value, out int total) && total > 0)
+                value = 82 + cur * 13 / total;
+            stepText = "等待发行版就绪...";
+        }
+        else if (line.Contains("✓ 发行版重启完成"))
+        {
+            value = 95;
+            stepText = "发行版就绪";
+        }
+        else if (line.Contains("✓ WSL2 + ClawDock 环境安装完成"))
+        {
+            value = 100;
+            stepText = "安装完成";
+        }
+
+        // Progress only goes forward (avoid regression during kernel update retries)
+        if (value >= 0)
+        {
+            WslProgressBar.Value = Math.Max(WslProgressBar.Value, value);
+            WslPercentText.Text = $"{(int)WslProgressBar.Value}%";
+        }
+        if (stepText != null)
+            WslStepText.Text = stepText;
     }
 
     // ── OpenClaw 安装 ─────────────────────────────────────────────────────
@@ -318,6 +437,8 @@ public partial class InstallWindow : Window
                 phase => _stateService.SavePhase(phase),
                 _cts.Token));
 
+            InstallProgressBar.IsIndeterminate = false;
+            InstallProgressBar.Value = 100;
             WriteLog("OpenClaw 安装完成");
             _stateService.MarkOpenClawDone();
             ClearResumeOnReboot();
@@ -326,6 +447,8 @@ public partial class InstallWindow : Window
         }
         catch (Exception ex)
         {
+            InstallProgressBar.IsIndeterminate = false;
+            InstallProgressBar.Value = 0;
             WriteLog($"❌ OpenClaw 安装异常: {ex}");
             ((IProgress<string>)progress).Report($"\n❌ 错误: {ex.Message}");
             ((IProgress<string>)progress).Report($"详细日志: {_logFilePath}");
