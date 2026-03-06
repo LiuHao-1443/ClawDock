@@ -289,8 +289,22 @@
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="安装 WSL2" FontSize="22" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                        <TextBlock Text="安装 WSL2" FontSize="22" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                        <ProgressBar x:Name="WslProgressBar" Height="4" IsIndeterminate="False"
+                                     Value="0" Maximum="100"
+                                     Foreground="{StaticResource AccentBrush}"
+                                     Background="#1A1A2E" BorderThickness="0"/>
+                        <Grid Margin="0,4,0,0">
+                            <TextBlock x:Name="WslStepText" Text="" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="WslPercentText" Text="0%" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Right"/>
+                        </Grid>
+                    </StackPanel>
 
                     <Border Grid.Row="1" Background="#0A0A15" CornerRadius="6"
                             BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
@@ -317,8 +331,13 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="安装 ClawDock" FontSize="22" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                        <TextBlock Text="安装 ClawDock" FontSize="22" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                        <ProgressBar x:Name="InstallProgressBar" Height="4" IsIndeterminate="True"
+                                     Foreground="{StaticResource AccentBrush}"
+                                     Background="#1A1A2E" BorderThickness="0"/>
+                    </StackPanel>
 
                     <Border Grid.Row="1" Background="#0A0A15" CornerRadius="6"
                             BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
@@ -352,11 +371,6 @@
             <Border Grid.Row="1" BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="0,1,0,0" Padding="40,16">
                 <Grid>
-                    <ProgressBar x:Name="InstallProgress" Height="3" VerticalAlignment="Top"
-                                 Minimum="0" Maximum="100" Value="0" Visibility="Collapsed"
-                                 Foreground="{StaticResource AccentBrush}"
-                                 Background="Transparent"
-                                 BorderThickness="0"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left"
                                 VerticalAlignment="Center">
                         <Button x:Name="BtnBack" Content="← 上一步"
