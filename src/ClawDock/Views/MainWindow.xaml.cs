@@ -1009,34 +1009,273 @@ public partial class MainWindow : Window
 
     private void AddFallbackModelRow(string value = "")
     {
-        var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var darkComboBoxReadOnlyStyle = (Style)FindResource("DarkComboBoxReadOnly");
+        var darkComboBoxStyle = (Style)FindResource("DarkComboBox");
+        var darkComboBoxItemStyle = (Style)FindResource("DarkComboBoxItem");
+        var darkPasswordBoxStyle = (Style)FindResource("DarkPasswordBox");
+        var darkTextBoxStyle = (Style)FindResource("DarkTextBox");
+        var secondaryButtonStyle = (Style)FindResource("SecondaryButton");
+        var fieldLabelStyle = (Style)FindResource("FieldLabel");
+        var fieldHintStyle = (Style)FindResource("FieldHint");
+        var surfaceBrush = (System.Windows.Media.Brush)FindResource("SurfaceBrush");
+        var borderBrush = (System.Windows.Media.Brush)FindResource("BorderBrush");
 
-        var tb = new WpfTextBox
+        // Parse initial value: "provider/model"
+        var initProvider = "";
+        var initModel = "";
+        if (!string.IsNullOrEmpty(value))
         {
-            Text = value,
-            Style = (Style)FindResource("DarkTextBox")
-        };
-        Grid.SetColumn(tb, 0);
-        row.Children.Add(tb);
+            var slashIdx = value.IndexOf('/');
+            if (slashIdx > 0)
+            {
+                initProvider = value[..slashIdx];
+                initModel = value[(slashIdx + 1)..];
+            }
+            else
+            {
+                initModel = value;
+            }
+        }
 
-        var btn = new WpfButton
+        // Card border — visual area to group each fallback
+        var border = new Border
+        {
+            Background = surfaceBrush,
+            BorderBrush = borderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(16),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+
+        var cardPanel = new StackPanel();
+        border.Child = cardPanel;
+
+        // Header: title + delete button
+        var header = new Grid();
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var headerText = new TextBlock
+        {
+            Text = "备选模型",
+            Style = fieldLabelStyle,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0)
+        };
+        Grid.SetColumn(headerText, 0);
+        header.Children.Add(headerText);
+
+        var btnDelete = new WpfButton
         {
             Content = "✕",
-            Style = (Style)FindResource("SecondaryButton"),
-            Padding = new Thickness(10, 6, 10, 6),
+            Style = secondaryButtonStyle,
+            Padding = new Thickness(10, 4, 10, 4),
+            FontSize = 12
+        };
+        btnDelete.Click += (_, _) => FallbackModelsList.Children.Remove(border);
+        Grid.SetColumn(btnDelete, 1);
+        header.Children.Add(btnDelete);
+
+        cardPanel.Children.Add(header);
+
+        // 服务商 label + ComboBox
+        cardPanel.Children.Add(new TextBlock
+        {
+            Text = "服务商",
+            Style = fieldLabelStyle,
+            Margin = new Thickness(0, 8, 0, 6)
+        });
+
+        var cboProvider = new System.Windows.Controls.ComboBox
+        {
+            Style = darkComboBoxReadOnlyStyle,
+            ItemContainerStyle = darkComboBoxItemStyle,
+            Tag = "fbProvider"
+        };
+        foreach (var p in _modelsByProvider.Keys.OrderBy(p => p))
+            cboProvider.Items.Add(p);
+        cardPanel.Children.Add(cboProvider);
+
+        cardPanel.Children.Add(new TextBlock
+        {
+            Text = "选择模型服务商",
+            Style = fieldHintStyle,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+
+        // 模型 label + ComboBox (editable)
+        cardPanel.Children.Add(new TextBlock
+        {
+            Text = "模型",
+            Style = fieldLabelStyle,
+            Margin = new Thickness(0, 12, 0, 6)
+        });
+
+        var cboModel = new System.Windows.Controls.ComboBox
+        {
+            Style = darkComboBoxStyle,
+            ItemContainerStyle = darkComboBoxItemStyle,
+            IsEditable = true,
+            Tag = "fbModel"
+        };
+        cardPanel.Children.Add(cboModel);
+
+        cardPanel.Children.Add(new TextBlock
+        {
+            Text = "可从列表选择或手动输入模型名称",
+            Style = fieldHintStyle,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+
+        // API Key label + PasswordBox/TextBox toggle
+        cardPanel.Children.Add(new TextBlock
+        {
+            Text = "API Key",
+            Style = fieldLabelStyle,
+            Margin = new Thickness(0, 12, 0, 6)
+        });
+
+        var keyRow = new Grid();
+        keyRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        keyRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var pwdKey = new System.Windows.Controls.PasswordBox
+        {
+            Style = darkPasswordBoxStyle,
+            Tag = "fbPwdKey"
+        };
+        Grid.SetColumn(pwdKey, 0);
+        keyRow.Children.Add(pwdKey);
+
+        var txtKey = new WpfTextBox
+        {
+            Style = darkTextBoxStyle,
+            Visibility = Visibility.Collapsed,
+            Tag = "fbTxtKey"
+        };
+        Grid.SetColumn(txtKey, 0);
+        keyRow.Children.Add(txtKey);
+
+        var btnToggle = new WpfButton
+        {
+            Content = "显示",
+            Style = secondaryButtonStyle,
+            Padding = new Thickness(12, 8, 12, 8),
             Margin = new Thickness(6, 0, 0, 0),
             FontSize = 12
         };
-        btn.Click += (_, _) => FallbackModelsList.Children.Remove(row);
-        Grid.SetColumn(btn, 1);
-        row.Children.Add(btn);
+        btnToggle.Click += (_, _) =>
+        {
+            if (pwdKey.Visibility == Visibility.Visible)
+            {
+                txtKey.Text = pwdKey.Password;
+                txtKey.Visibility = Visibility.Visible;
+                pwdKey.Visibility = Visibility.Collapsed;
+                btnToggle.Content = "隐藏";
+            }
+            else
+            {
+                pwdKey.Password = txtKey.Text;
+                pwdKey.Visibility = Visibility.Visible;
+                txtKey.Visibility = Visibility.Collapsed;
+                btnToggle.Content = "显示";
+            }
+        };
+        Grid.SetColumn(btnToggle, 1);
+        keyRow.Children.Add(btnToggle);
 
-        FallbackModelsList.Children.Add(row);
+        cardPanel.Children.Add(keyRow);
+
+        var hint = new TextBlock
+        {
+            Style = fieldHintStyle,
+            Margin = new Thickness(0, 4, 0, 0),
+            Tag = "fbHint"
+        };
+        cardPanel.Children.Add(hint);
+
+        // Set initial values BEFORE attaching SelectionChanged (match primary model pattern)
+        if (!string.IsNullOrEmpty(initProvider))
+        {
+            // Manually populate models for initial provider
+            if (_modelsByProvider.TryGetValue(initProvider, out var initModels))
+            {
+                foreach (var m in initModels)
+                    cboModel.Items.Add(m);
+            }
+
+            foreach (var item in cboProvider.Items)
+            {
+                if (item.ToString() == initProvider)
+                {
+                    cboProvider.SelectedItem = item;
+                    break;
+                }
+            }
+            cboModel.Text = initModel;
+
+            // Load API key for initial provider
+            var initKey = "";
+            _providerApiKeys.TryGetValue(initProvider, out initKey);
+            initKey ??= "";
+            pwdKey.Password = initKey;
+            txtKey.Text = initKey;
+
+            hint.Text = $"留空则使用 {initProvider} 的默认 Key";
+        }
+        else
+        {
+            hint.Text = "留空则使用默认 Key";
+        }
+
+        // Attach SelectionChanged AFTER initial values are set
+        cboProvider.SelectionChanged += (_, _) =>
+        {
+            var provider = cboProvider.SelectedItem?.ToString();
+            cboModel.Items.Clear();
+            if (provider != null && _modelsByProvider.TryGetValue(provider, out var models))
+            {
+                foreach (var m in models)
+                    cboModel.Items.Add(m);
+            }
+            cboModel.Text = "";
+
+            // Load API key for this provider
+            var apiKey = "";
+            if (provider != null)
+                _providerApiKeys.TryGetValue(provider, out apiKey);
+            apiKey ??= "";
+            pwdKey.Password = apiKey;
+            txtKey.Text = apiKey;
+
+            hint.Text = string.IsNullOrEmpty(provider)
+                ? "留空则使用默认 Key"
+                : $"留空则使用 {provider} 的默认 Key";
+        };
+
+        FallbackModelsList.Children.Add(border);
     }
 
     private void BtnAddFallback_Click(object sender, RoutedEventArgs e) => AddFallbackModelRow();
+
+    private static T? FindTaggedControl<T>(StackPanel panel, string tag) where T : FrameworkElement
+    {
+        foreach (var child in panel.Children)
+        {
+            if (child is T fe && fe.Tag?.ToString() == tag)
+                return fe;
+            if (child is System.Windows.Controls.Panel sub)
+            {
+                foreach (var gc in sub.Children)
+                {
+                    if (gc is T fe2 && fe2.Tag?.ToString() == tag)
+                        return fe2;
+                }
+            }
+        }
+        return null;
+    }
 
     // ── 动态列表：Provider 模型 ─────────────────────────────────────────────
 
@@ -1501,15 +1740,47 @@ public partial class MainWindow : Window
                 PrimaryModel = fullModel
             };
 
-            // Collect fallback models
-            foreach (var child in FallbackModelsList.Children)
+            // Collect fallback models from card layout
+            // Track which providers already had their key saved from fallback cards
+            var fbSavedProviderKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Snapshot to avoid InvalidOperationException if collection is modified during await
+            var fallbackCards = FallbackModelsList.Children.OfType<Border>().ToList();
+            foreach (var fbBorder in fallbackCards)
             {
-                if (child is Grid row)
+                if (fbBorder.Child is StackPanel fbPanel)
                 {
-                    foreach (var c in row.Children)
+                    var fbProvider = FindTaggedControl<System.Windows.Controls.ComboBox>(fbPanel, "fbProvider")?.SelectedItem?.ToString();
+                    var fbModel = FindTaggedControl<System.Windows.Controls.ComboBox>(fbPanel, "fbModel")?.Text?.Trim();
+
+                    if (!string.IsNullOrEmpty(fbProvider) && !string.IsNullOrEmpty(fbModel))
                     {
-                        if (c is WpfTextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
-                            modelConfig.FallbackModels.Add(tb.Text.Trim());
+                        var fullName = fbModel.StartsWith(fbProvider + "/") ? fbModel : $"{fbProvider}/{fbModel}";
+                        modelConfig.FallbackModels.Add(fullName);
+
+                        // Save API key for this provider, but:
+                        // - Only when the card is complete (provider + model both present)
+                        // - Skip if primary model uses the same provider (primary key save below is authoritative)
+                        // - Skip if another fallback card already saved a key for this provider (first-writer-wins)
+                        var fbPwd = FindTaggedControl<System.Windows.Controls.PasswordBox>(fbPanel, "fbPwdKey");
+                        var fbTxt = FindTaggedControl<WpfTextBox>(fbPanel, "fbTxtKey");
+                        var fbKey = fbTxt?.Visibility == Visibility.Visible
+                            ? fbTxt?.Text?.Trim() ?? ""
+                            : fbPwd?.Password ?? "";
+                        if (!string.IsNullOrEmpty(fbKey)
+                            && fbProvider != selectedProvider
+                            && fbSavedProviderKeys.Add(fbProvider)
+                            && (!_providerApiKeys.TryGetValue(fbProvider, out var existingKey) || existingKey != fbKey))
+                        {
+                            try
+                            {
+                                if (await _configService.SaveProviderApiKeyAsync(fbProvider, fbKey))
+                                    _providerApiKeys[fbProvider] = fbKey;
+                            }
+                            catch (Exception ex)
+                            {
+                                OnGatewayLogReceived($"[设置] {fbProvider} API Key 保存异常: {ex.Message}");
+                            }
+                        }
                     }
                 }
             }
