@@ -5,6 +5,8 @@ use tokio::process::{Child, Command};
 use crate::services::shell_backend::{clean_line, CommandOutput, ShellBackend, ShellError};
 
 const WSL_DISTRO: &str = "ClawDock";
+/// Hide console window when spawning child processes on Windows.
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub struct WslShellBackend {
     distro: String,
@@ -30,6 +32,7 @@ impl WslShellBackend {
             "-c",
             command,
         ]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
         cmd
     }
 }

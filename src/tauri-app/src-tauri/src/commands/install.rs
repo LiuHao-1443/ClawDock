@@ -94,8 +94,13 @@ pub async fn openclaw_uninstall(
     // 3. Optionally remove WSL distro (Windows only)
     if remove_distro && state.shell.platform() == "windows" {
         let _ = app.emit("install-progress", "▶ Removing WSL distro...");
-        let output = tokio::process::Command::new("wsl")
-            .args(["--unregister", wsl_service::DISTRO_NAME])
+        #[cfg(target_os = "windows")]
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let mut cmd = tokio::process::Command::new("wsl");
+        cmd.args(["--unregister", wsl_service::DISTRO_NAME]);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        let output = cmd
             .output()
             .await
             .map_err(|e| format!("Failed to unregister distro: {}", e))?;

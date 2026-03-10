@@ -41,7 +41,7 @@ export function StatusBar() {
     <TooltipProvider delayDuration={200}>
       <div className="h-6 bg-card border-t border-border flex items-center justify-between px-3 shrink-0 gap-3">
         {/* Left: version + model */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-[11px] text-muted-foreground shrink-0">
             ClawDock v{typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev"}
           </span>

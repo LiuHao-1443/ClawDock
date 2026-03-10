@@ -89,8 +89,8 @@ export async function configSaveProviderApiKey(
   apiKey: string,
 ): Promise<boolean> {
   return invoke<boolean>("config_save_provider_api_key", {
-    provider_name: providerName,
-    api_key: apiKey,
+    providerName,
+    apiKey,
   });
 }
 
@@ -161,5 +161,5 @@ export async function openclawUpdate(): Promise<boolean> {
 }
 
 export async function openclawUninstall(removeDistro: boolean): Promise<void> {
-  return invoke("openclaw_uninstall", { remove_distro: removeDistro });
+  return invoke("openclaw_uninstall", { removeDistro });
 }

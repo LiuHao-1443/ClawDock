@@ -235,9 +235,11 @@ async fn run_wsl_cmd_logged(
     on_log: &(dyn Fn(String) + Send + Sync),
 ) -> i32 {
     use tokio::io::{AsyncBufReadExt, BufReader};
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
 
     let mut cmd = tokio::process::Command::new("wsl");
     cmd.args(args)
+        .creation_flags(CREATE_NO_WINDOW)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
@@ -322,12 +324,15 @@ fn get_windows_build() -> String {
 
 #[cfg(target_os = "windows")]
 fn is_virtualization_enabled() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let output = std::process::Command::new("powershell")
         .args([
             "-NoProfile",
             "-Command",
             "$p = Get-WmiObject Win32_Processor; $c = Get-WmiObject Win32_ComputerSystem; ($p.VirtualizationFirmwareEnabled -eq $true) -or ($c.HypervisorPresent -eq $true)"
         ])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     match output {
@@ -341,8 +346,11 @@ fn is_virtualization_enabled() -> bool {
 
 #[cfg(target_os = "windows")]
 fn is_wsl2_installed() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let output = std::process::Command::new("wsl")
         .args(["--status"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     match output {
