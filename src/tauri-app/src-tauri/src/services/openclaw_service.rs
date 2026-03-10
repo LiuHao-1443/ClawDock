@@ -159,7 +159,7 @@ curl -fsSL "https://npmmirror.com/mirrors/node/v$NODE_VER/node-v$NODE_VER-linux-
         let cmd = if self.shell.platform() == "windows" {
             "/usr/local/bin/npm uninstall -g openclaw 2>&1 || true"
         } else {
-            "npm uninstall -g openclaw 2>&1 || true"
+            "openclaw uninstall --all --yes 2>&1 || true; rm -rf ~/.openclaw 2>/dev/null || true"
         };
 
         let exit_code = self
