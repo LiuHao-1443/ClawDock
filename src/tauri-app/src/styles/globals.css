@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 33% 8%;
+    --foreground: 0 0% 88%;
+    --card: 240 28% 14%;
+    --card-foreground: 0 0% 88%;
+    --popover: 240 28% 14%;
+    --popover-foreground: 0 0% 88%;
+    --primary: 213 89% 63%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 24% 20%;
+    --secondary-foreground: 0 0% 88%;
+    --muted: 240 24% 20%;
+    --muted-foreground: 240 5% 57%;
+    --accent: 240 24% 20%;
+    --accent-foreground: 0 0% 88%;
+    --destructive: 4 90% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 26% 22%;
+    --input: 240 26% 22%;
+    --ring: 213 89% 63%;
+    --radius: 0.5rem;
+
+    --success: 122 39% 49%;
+    --warning: 36 100% 50%;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    @apply border-border;
+  }
+
+  body {
+    font-family: "Segoe UI", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    user-select: none;
+    overflow: hidden;
+    @apply bg-background text-foreground;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(240 24% 28%);
+  }
+}
+
+/* Animations */
+.animate-slide-up {
+  animation: slideUp 0.2s ease-out;
+}
+
+.animate-slide-left {
+  animation: slideLeft 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideLeft {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}

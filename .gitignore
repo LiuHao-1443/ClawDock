@@ -34,3 +34,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Tauri / Rust
+src/tauri-app/node_modules/
+src/tauri-app/src-tauri/target/
+src/tauri-app/src-tauri/gen/
+src/tauri-app/dist/

@@ -1,0 +1,46 @@
+{
+  "productName": "ClawDock",
+  "version": "0.8.0-alpha",
+  "identifier": "com.clawdock.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "ClawDock",
+        "width": 680,
+        "height": 520,
+        "minWidth": 480,
+        "minHeight": 400,
+        "center": true,
+        "decorations": true,
+        "resizable": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:18789 http://localhost:18789 ws://127.0.0.1:18789 ws://localhost:18789 https://registry.npmmirror.com; font-src 'self'; frame-src http://127.0.0.1:18789 http://localhost:18789"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "targets": "all",
+    "windows": {
+      "wix": {
+        "language": "en-US"
+      }
+    }
+  },
+  "plugins": {}
+}
