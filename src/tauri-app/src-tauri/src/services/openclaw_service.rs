@@ -70,19 +70,11 @@ curl -fsSL "https://npmmirror.com/mirrors/node/v$NODE_VER/node-v$NODE_VER-linux-
                 ]
             }
             _ => {
-                // macOS and Linux: require Node.js pre-installed
+                // macOS and Linux: use official one-click install script
                 vec![
                     (
-                        "Checking for Node.js",
-                        "command -v node || (echo 'Node.js not found. Please install Node.js 22+ first.' && exit 1)".to_string(),
-                    ),
-                    (
-                        "Configuring npm mirror",
-                        "npm config set registry https://registry.npmmirror.com".to_string(),
-                    ),
-                    (
-                        "Installing OpenClaw globally",
-                        "npm install -g openclaw@latest".to_string(),
+                        "Installing OpenClaw via official script",
+                        "curl -fsSL https://openclaw.ai/install.sh | bash".to_string(),
                     ),
                 ]
             }
