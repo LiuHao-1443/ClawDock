@@ -24,6 +24,9 @@ jobs:
         with:
           workspaces: src/tauri-app/src-tauri
 
+      - name: Create frontend dist stub
+        run: mkdir -p src/tauri-app/dist && echo "<html></html>" > src/tauri-app/dist/index.html
+
       - name: Run tests
         working-directory: src/tauri-app/src-tauri
         run: cargo test --verbose
