@@ -25,7 +25,7 @@ public class GatewayService
     /// <summary>带 auth token 的 Gateway URL，供 WebView2 使用</summary>
     public string DashboardUrl => string.IsNullOrEmpty(_authToken)
         ? GatewayUrl
-        : $"{GatewayUrl}?token={_authToken}";
+        : $"{GatewayUrl}#token={_authToken}";
 
     private string _authToken = string.Empty;
     public string AuthToken => _authToken;

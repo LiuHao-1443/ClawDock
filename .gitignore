@@ -34,3 +34,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Tauri app (only on feature/tauri-crossplatform branch)
+src/tauri-app/
