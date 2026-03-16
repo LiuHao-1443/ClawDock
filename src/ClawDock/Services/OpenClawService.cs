@@ -38,7 +38,7 @@ public class OpenClawService
              $"{Env} apt-get update -q"),
 
             ("安装基础工具",
-             $"{Env} apt-get install -y -q curl ca-certificates git xz-utils"),
+             $"{Env} apt-get install -y -q curl ca-certificates git xz-utils python3"),
 
             // 从淘宝 Node.js 镜像直接下载二进制包，避免依赖境外 NodeSource 源
             // 脚本通过 base64 传入，绕开 wsl.exe 的引号/转义问题

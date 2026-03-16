@@ -276,13 +276,15 @@ public partial class MainWindow : Window
             {
                 await WslService.RunCommandStreamAsync("wsl",
                     $"-d {WslService.DistroName} --user root -- openclaw --version",
-                    line => version = line.Trim());
+                    line => { if (string.IsNullOrEmpty(version)) version = line.Trim(); });
             });
 
             if (!string.IsNullOrEmpty(version))
             {
-                _installedVersion = version;
-                Dispatcher.Invoke(() => VersionText.Text = $"OpenClaw v{version}");
+                // openclaw --version returns "OpenClaw 2026.3.13 (hash)" — extract version number only
+                var match = System.Text.RegularExpressions.Regex.Match(version, @"(\d+\.\d+\.\d+)");
+                _installedVersion = match.Success ? match.Groups[1].Value : version;
+                Dispatcher.Invoke(() => VersionText.Text = $"OpenClaw v{_installedVersion}");
             }
         }
         catch { }

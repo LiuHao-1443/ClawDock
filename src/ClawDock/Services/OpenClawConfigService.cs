@@ -425,7 +425,7 @@ public class OpenClawConfigService
         return deleted;
     }
 
-    /// <summary>Save API key for a provider via auth-profiles.json + openclaw.json auth section</summary>
+    /// <summary>Save API key for a provider via .env file + auth-profiles.json + openclaw.json auth section</summary>
     public async Task<bool> SaveProviderApiKeyAsync(string providerName, string apiKey)
     {
         if (string.IsNullOrWhiteSpace(providerName))
@@ -439,17 +439,33 @@ public class OpenClawConfigService
         var safeProfileId = EscapeForJsString($"{providerName}:manual");
         var safeToken = EscapeForJsString(apiKey);
 
-        // 通过 node 脚本写入 auth-profiles.json 和 openclaw.json auth 配置
-        // OpenClaw 使用独立的 auth store，而非 config 中的 apiKey 字段
+        // 通过 node 脚本写入 .env + auth-profiles.json + openclaw.json auth 配置
+        // 内置服务商（如 kimi-coding）通过 ~/.openclaw/.env 中的环境变量读取 API key
+        // 自定义服务商通过 auth-profiles.json 读取
         var script = $$"""
             const fs = require('fs');
             const AGENT_DIR = '/root/.openclaw/agents/main/agent';
             const CONFIG_PATH = '/root/.openclaw/openclaw.json';
+            const ENV_PATH = '/root/.openclaw/.env';
             const provider = '{{safeProvider}}';
             const profileId = '{{safeProfileId}}';
             const token = '{{safeToken}}';
 
-            // 1. Update auth-profiles.json
+            // 1. Write to ~/.openclaw/.env (works for both built-in and custom providers)
+            const envKey = provider.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase() + '_API_KEY';
+            let envLines = [];
+            try { envLines = fs.readFileSync(ENV_PATH, 'utf8').split('\n'); } catch {}
+            const idx = envLines.findIndex(l => l.startsWith(envKey + '='));
+            const safeVal = '"' + token.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n') + '"';
+            const envEntry = envKey + '=' + safeVal;
+            if (idx >= 0) envLines[idx] = envEntry;
+            else envLines.push(envEntry);
+            const envTmp = ENV_PATH + '.tmp';
+            fs.writeFileSync(envTmp, envLines.filter(l => l.trim()).join('\n') + '\n');
+            fs.chmodSync(envTmp, 0o600);
+            fs.renameSync(envTmp, ENV_PATH);
+
+            // 2. Update auth-profiles.json
             fs.mkdirSync(AGENT_DIR, { recursive: true });
             const authPath = AGENT_DIR + '/auth-profiles.json';
             let store = { profiles: {} };
@@ -460,7 +476,7 @@ public class OpenClawConfigService
             fs.renameSync(authTmp, authPath);
             fs.chmodSync(authPath, 0o600);
 
-            // 2. Update openclaw.json auth section
+            // 3. Update openclaw.json auth section
             const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
             if (!cfg.auth) cfg.auth = {};
             if (!cfg.auth.profiles) cfg.auth.profiles = {};
